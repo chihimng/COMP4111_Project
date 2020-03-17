@@ -8,7 +8,7 @@ import org.apache.http.protocol.HttpRequestHandler;
 
 import java.io.IOException;
 
-public class LoginRequestHandler implements HttpRequestHandler {
+public class LogoutRequestHandler implements HttpRequestHandler {
     @Override
     public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
         if (!(request instanceof HttpEntityEnclosingRequest)) {
@@ -21,33 +21,21 @@ public class LoginRequestHandler implements HttpRequestHandler {
         HttpEntity entity = entityEnclosingRequest.getEntity();
         ObjectMapper mapper = new ObjectMapper();
         JsonNode root = mapper.readTree(entity.getContent());
-        String username;
-        String password;
-        try {
-            username = root.get("Username").asText();
-            password = root.get("Password").asText();
-        } catch (Exception e) { // parsing failed
+        String token = root.get("Token").asText();
+        if (token.isEmpty()) {
             // FIXME: update to align with api spec
-            System.out.println("Username or Password empty");
+            System.out.println("Token empty");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
         }
-        if (username.isEmpty() || password.isEmpty()) {
-            // FIXME: update to align with api spec
-            System.out.println("Username or Password empty");
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            return;
-        }
-        String token;
         try {
-            response.setStatusCode(HttpStatus.SC_OK);
-            StringEntity body = new StringEntity(
-                    "{\"Token\": \""+ DbHelper.getInstance().signIn(username, password) +"\"}",
-                    ContentType.APPLICATION_JSON);
-            response.setEntity(body);
-        } catch (DbHelper.SignInConflictException e) {
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CONFLICT);
-        } catch (DbHelper.SignInBadRequestException e) {
+            if (DbHelper.getInstance().signOut(token)) {
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+            } else { // should not happen
+                System.out.println("this should not happen: returning logout false without exception");
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            }
+        } catch (DbHelper.SignOutBadRequestException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
         } catch (Exception e) {
             e.printStackTrace();

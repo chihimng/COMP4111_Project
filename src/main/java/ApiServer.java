@@ -29,6 +29,7 @@ public class ApiServer {
                 .setExceptionLogger(ExceptionLogger.STD_ERR)
                 .registerHandler("/", new HelloWorldRequestHandler())
                 .registerHandler("/BookManagementService/login", new LoginRequestHandler())
+                .registerHandler("/BookManagementService/logout", new LogoutRequestHandler())
                 .create();
 
         try {

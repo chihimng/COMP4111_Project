@@ -60,38 +60,71 @@ public class DbHelper {
         }
     }
 
-    public String signIn(String username, String password) throws Exception {
+    public String signIn(String username, String password) throws SignInException {
         String token = UUID.randomUUID().toString();
-
-        Connection conn = DriverManager.getConnection(dbUrl);
-        PreparedStatement stmt = conn.prepareStatement("INSERT INTO session (username, access_token) VALUES ((SELECT username FROM user WHERE username = ? AND password = ?), ?)");
-        stmt.setString(1, username);
-        stmt.setString(2, password);
-        stmt.setString(3, token);
+        Connection conn = null;
+        PreparedStatement stmt = null;
         try {
+            conn = DriverManager.getConnection(dbUrl);
+            stmt = conn.prepareStatement("INSERT INTO session (username, token) VALUES ((SELECT username FROM user WHERE username = ? AND password = ?), ?)");
+            stmt.setString(1, username);
+            stmt.setString(2, password);
+            stmt.setString(3, token);
+
             if (stmt.executeUpdate() > 0) { // success
-                stmt.close();
-                conn.close();
                 return token;
             } else { // this should not happen
-                throw new Exception("this should now happen: updated 0 rows without exception");
+                throw new SignInException("this should now happen: updated 0 rows without exception");
             }
         } catch (SQLException e) {
             if (e.getMessage().contains("Column 'username' cannot be null")) {
                 // failed, username/pw wrong
-                stmt.close();
-                conn.close();
                 throw new SignInBadRequestException("Incorrect Username or Password");
             } else if (e.getMessage().contains("Duplicate entry")) {
                 // failed, dup login
-                stmt.close();
-                conn.close();
                 throw new SignInConflictException("Duplicate Sign In");
             } else {
-                stmt.close();
-                conn.close();
-                throw e;
+                throw new SignInException(e.getMessage());
             }
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
+            } catch (Exception e) {}
+        }
+    }
+
+    public static class SignOutException extends Exception {
+        SignOutException(String s) {
+            super(s);
+        }
+    }
+
+    public static class SignOutBadRequestException extends SignOutException {
+        SignOutBadRequestException(String s) {
+            super(s);
+        }
+    }
+
+    public boolean signOut(String token) throws SignOutException {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        try {
+            conn = DriverManager.getConnection(dbUrl);
+            stmt = conn.prepareStatement("DELETE FROM session WHERE token = ?;");
+            stmt.setString(1, token);
+            if (stmt.executeUpdate() > 0) { // success
+                return true;
+            } else { // failed: token not found
+                throw new SignOutBadRequestException("Token not found");
+            }
+        } catch (SQLException e) {
+            throw new SignOutException(e.getMessage());
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
+            } catch (Exception e) {}
         }
     }
 }
