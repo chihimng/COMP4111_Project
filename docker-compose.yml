@@ -16,9 +16,8 @@ services:
     restart: always
     ports:
       - 8080:80
+    depends_on:
+      - db
     environment:
       PORT: 80
-      DATABASE_HOST: db
-      DATABASE_PORT: 3306
-      DATABASE_USER: comp4111
-      DATABASE_PASSWORD: comp4111
+      DB_URL: mysql://db:3306/comp4111?user=comp4111&password=comp4111&useSSL=false

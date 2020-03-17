@@ -2,4 +2,4 @@
 set -e
 ./gradlew clean
 ./gradlew jar
-docker-compose up -d --build
+docker-compose up --build
