@@ -10,6 +10,11 @@ import java.util.concurrent.TimeUnit;
 public class ApiServer {
     public static void main(String[] args) {
         int port = 8080;
+        try {
+            port = Integer.parseInt(System.getenv("PORT"));
+        } catch (Exception e) {
+            System.out.println("Failed to obtain port config from env, reverting to 8080.");
+        }
 
         SocketConfig socketConfig = SocketConfig.custom()
                 .setSoTimeout(15000)
@@ -24,7 +29,6 @@ public class ApiServer {
                 .setExceptionLogger(ExceptionLogger.STD_ERR)
                 .registerHandler("*", new HelloWorldRequestHandler())
                 .create();
-
 
         try {
             server.start();
