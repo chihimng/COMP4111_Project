@@ -1,19 +1,19 @@
-create schema if not exists comp4111 collate latin1_swedish_ci;
+create schema comp4111 collate latin1_swedish_ci;
 
-create table if not exists user
+create table user
 (
 	username varchar(32) not null
 		primary key,
 	password varchar(32) null
 );
 
-create table if not exists sessions
+create table session
 (
-	username varchar(32) not null
+	username varchar(32) not null,
+	token char(36) not null
 		primary key,
-	access_token varchar(32) not null,
-	constraint sessions_access_token_uindex
-		unique (access_token),
+	constraint session_username_uindex
+		unique (username),
 	constraint sessions_user_username_fk
 		foreign key (username) references user (username)
 );
