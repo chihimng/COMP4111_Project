@@ -29,30 +29,21 @@ public class LoginRequestHandler implements HttpRequestHandler {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
         }
-        System.out.println("Username: "+ username + " Password: " + password);
         String token;
         try {
-            token = DbHelper.getInstance().signIn(username, password);
+            response.setStatusCode(HttpStatus.SC_OK);
+            StringEntity body = new StringEntity(
+                    "{\"Token\": \""+ DbHelper.getInstance().signIn(username, password) +"\"}",
+                    ContentType.APPLICATION_JSON);
+            response.setEntity(body);
         } catch (DbHelper.SignInConflictException e) {
-            // FIXME: update to align with api spec
-            System.out.println("Duplicate signin");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CONFLICT);
-            return;
         } catch (DbHelper.SignInBadRequestException e) {
-            // FIXME: update to align with api spec
-            System.out.println("Incorrect username or pw");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            return;
         } catch (Exception e) {
             e.printStackTrace();
             // FIXME: update to align with api spec
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-            return;
         }
-        response.setStatusCode(HttpStatus.SC_OK);
-        StringEntity body = new StringEntity(
-        "{\"Token\": \""+ token +"\"}",
-            ContentType.APPLICATION_JSON);
-        response.setEntity(body);
     }
 }

@@ -61,41 +61,37 @@ public class DbHelper {
     }
 
     public String signIn(String username, String password) throws Exception {
+        String token = UUID.randomUUID().toString();
+
         Connection conn = DriverManager.getConnection(dbUrl);
-        PreparedStatement stmt = conn.prepareStatement("SELECT username FROM user WHERE username = ? AND password = ?;");
+        PreparedStatement stmt = conn.prepareStatement("INSERT INTO session (username, access_token) VALUES ((SELECT username FROM user WHERE username = ? AND password = ?), ?)");
         stmt.setString(1, username);
         stmt.setString(2, password);
-        ResultSet rs = stmt.executeQuery();
-        if (rs.next() && rs.getString(1).equals(username)) {
-            // success
-            String token = UUID.randomUUID().toString();
-            stmt.close();
-            stmt = conn.prepareStatement("INSERT INTO session (username, access_token) VALUES (?, ?);");
-            stmt.setString(1, username);
-            stmt.setString(2, token);
-            int rowsAffected = 0;
-            try {
-                rowsAffected = stmt.executeUpdate();
-            } catch (SQLException e) {
-                e.printStackTrace();
-            }
-            if (rowsAffected > 0) { // success
-                rs.close();
+        stmt.setString(3, token);
+        try {
+            if (stmt.executeUpdate() > 0) { // success
                 stmt.close();
                 conn.close();
                 return token;
-            } else { // failed, assume to be dup login
-                rs.close();
+            } else { // this should not happen
+                throw new Exception("this should now happen: updated 0 rows without exception");
+            }
+        } catch (SQLException e) {
+            if (e.getMessage().contains("Column 'username' cannot be null")) {
+                // failed, username/pw wrong
+                stmt.close();
+                conn.close();
+                throw new SignInBadRequestException("Incorrect Username or Password");
+            } else if (e.getMessage().contains("Duplicate entry")) {
+                // failed, dup login
                 stmt.close();
                 conn.close();
                 throw new SignInConflictException("Duplicate Sign In");
+            } else {
+                stmt.close();
+                conn.close();
+                throw e;
             }
-        } else {
-            // failed, username/pw wrong
-            rs.close();
-            stmt.close();
-            conn.close();
-            throw new SignInBadRequestException("Incorrect Username or Password");
         }
     }
 }
