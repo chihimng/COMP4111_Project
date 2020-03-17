@@ -4,7 +4,7 @@ create table if not exists user
 (
 	username varchar(32) not null
 		primary key,
-	password char(64) null
+	password varchar(32) null
 );
 
 create table if not exists sessions

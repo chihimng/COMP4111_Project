@@ -1,4 +1,5 @@
 import java.sql.*;
+import java.util.UUID;
 
 // Notice, do not import com.mysql.jdbc.*
 // or you will have problems!
@@ -41,5 +42,60 @@ public class DbHelper {
         }
         conn.close();
         return result;
+    }
+
+    public static class SignInException extends Exception {
+        SignInException(String s) {
+            super(s);
+        }
+    }
+    public static class SignInConflictException extends SignInException {
+        SignInConflictException(String s) {
+            super(s);
+        }
+    }
+    public static class SignInBadRequestException extends SignInException {
+        SignInBadRequestException(String s) {
+            super(s);
+        }
+    }
+
+    public String signIn(String username, String password) throws Exception {
+        Connection conn = DriverManager.getConnection(dbUrl);
+        PreparedStatement stmt = conn.prepareStatement("SELECT username FROM user WHERE username = ? AND password = ?;");
+        stmt.setString(1, username);
+        stmt.setString(2, password);
+        ResultSet rs = stmt.executeQuery();
+        if (rs.next() && rs.getString(1).equals(username)) {
+            // success
+            String token = UUID.randomUUID().toString();
+            stmt.close();
+            stmt = conn.prepareStatement("INSERT INTO session (username, access_token) VALUES (?, ?);");
+            stmt.setString(1, username);
+            stmt.setString(2, token);
+            int rowsAffected = 0;
+            try {
+                rowsAffected = stmt.executeUpdate();
+            } catch (SQLException e) {
+                e.printStackTrace();
+            }
+            if (rowsAffected > 0) { // success
+                rs.close();
+                stmt.close();
+                conn.close();
+                return token;
+            } else { // failed, assume to be dup login
+                rs.close();
+                stmt.close();
+                conn.close();
+                throw new SignInConflictException("Duplicate Sign In");
+            }
+        } else {
+            // failed, username/pw wrong
+            rs.close();
+            stmt.close();
+            conn.close();
+            throw new SignInBadRequestException("Incorrect Username or Password");
+        }
     }
 }
