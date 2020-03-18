@@ -30,6 +30,7 @@ public class ApiServer {
                 .registerHandler("/", new HelloWorldRequestHandler())
                 .registerHandler("/BookManagementService/login", new LoginRequestHandler())
                 .registerHandler("/BookManagementService/logout", new LogoutRequestHandler())
+                .registerHandler("/BookManagementService/books*", new BooksRequestHandler())
                 .create();
 
         try {

@@ -124,7 +124,55 @@ public class DbHelper {
             try {
                 if (stmt != null) stmt.close();
                 if (conn != null) conn.close();
-            } catch (Exception e) {}
+            } catch (Exception e) {
+            }
+        }
+    }
+
+    public static class CreateBookException extends Exception {
+        CreateBookException(String s) {
+            super(s);
+        }
+    }
+    public static class CreateBookConflictException extends CreateBookException {
+        CreateBookConflictException(String s) {
+            super(s);
+        }
+    }
+
+    public int createBook(Book book) throws CreateBookException {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        try {
+            conn = DriverManager.getConnection(dbUrl);
+            stmt = conn.prepareStatement("INSERT INTO book (title, author, publisher, year) VALUES (?, ?, ?, ?);");
+            stmt.setString(1, book.title);
+            stmt.setString(2, book.author);
+            stmt.setString(3, book.publisher);
+            stmt.setInt(4, book.year);
+            if (stmt.executeUpdate() > 0) { // success
+                stmt.close();
+                stmt = conn.prepareCall("SELECT LAST_INSERT_ID();");
+                ResultSet rs = stmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getInt(1);
+                } else {
+                    throw new CreateBookException("failed to get last inserted id");
+                }
+            } else { // failed
+                throw new CreateBookException("this should now happen: updated 0 rows without exception");
+            }
+        } catch (SQLException e) {
+            if (e.getMessage().contains("Duplicate entry")) {
+                throw new CreateBookConflictException("Duplicate found");
+            }
+            throw new CreateBookException(e.getMessage());
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
+            } catch (Exception e) {
+            }
         }
     }
 }
