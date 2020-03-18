@@ -1,4 +1,5 @@
-import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.*;
 import org.apache.http.entity.ContentType;
@@ -9,6 +10,35 @@ import org.apache.http.protocol.HttpRequestHandler;
 import java.io.IOException;
 
 public class LoginRequestHandler implements HttpRequestHandler {
+     public static class RequestBody {
+        @JsonProperty("Username")
+        public String username;
+
+        @JsonProperty("Password")
+        public String password;
+
+        RequestBody() {}
+
+        RequestBody(String username, String password) {
+            this.username = username;
+            this.password = password;
+        }
+
+        @JsonIgnore
+        public boolean isEmpty() {
+            return this.username == null || this.username.isEmpty() || this.password == null || this.password.isEmpty();
+        }
+    }
+    public static class ResponseBody {
+        @JsonProperty("Token")
+        public String token;
+
+        ResponseBody() {}
+
+        ResponseBody(String token) {
+            this.token = token;
+        }
+    }
     @Override
     public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
         if (!(request instanceof HttpEntityEnclosingRequest)) {
@@ -20,30 +50,30 @@ public class LoginRequestHandler implements HttpRequestHandler {
         HttpEntityEnclosingRequest entityEnclosingRequest = (HttpEntityEnclosingRequest) request;
         HttpEntity entity = entityEnclosingRequest.getEntity();
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode root = mapper.readTree(entity.getContent());
-        String username;
-        String password;
+        RequestBody requestBody;
         try {
-            username = root.get("Username").asText();
-            password = root.get("Password").asText();
+            requestBody = mapper.readValue(entity.getContent(), RequestBody.class);
         } catch (Exception e) { // parsing failed
             // FIXME: update to align with api spec
-            System.out.println("Username or Password empty");
+            e.printStackTrace();
+            System.out.println("Body parsing failed");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
         }
-        if (username.isEmpty() || password.isEmpty()) {
+        if (requestBody == null || requestBody.isEmpty()) {
             // FIXME: update to align with api spec
             System.out.println("Username or Password empty");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
         }
-        String token;
+
         try {
             response.setStatusCode(HttpStatus.SC_OK);
+            ResponseBody responseBody = new ResponseBody(DbHelper.getInstance().signIn(requestBody.username, requestBody.password));
             StringEntity body = new StringEntity(
-                    "{\"Token\": \""+ DbHelper.getInstance().signIn(username, password) +"\"}",
-                    ContentType.APPLICATION_JSON);
+                mapper.writeValueAsString(responseBody),
+                ContentType.APPLICATION_JSON
+            );
             response.setEntity(body);
         } catch (DbHelper.SignInConflictException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CONFLICT);
