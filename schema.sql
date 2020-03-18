@@ -1,10 +1,23 @@
 create schema comp4111 collate latin1_swedish_ci;
 
+create table book
+(
+	id smallint unsigned auto_increment
+		primary key,
+	title varchar(128) not null,
+	author varchar(128) not null,
+	publisher varchar(128) not null,
+	year smallint unsigned not null,
+	constraint book_pk_2
+		unique (title, author, publisher, year)
+);
+
 create table user
 (
 	username varchar(32) not null
 		primary key,
-	password varchar(32) null
+	password binary(32) not null,
+	salt char(36) null
 );
 
 create table session
@@ -17,6 +30,7 @@ create table session
 	constraint sessions_user_username_fk
 		foreign key (username) references user (username)
 );
+
 
 DELIMITER $$
 CREATE PROCEDURE CreateUser()
