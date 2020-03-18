@@ -28,10 +28,16 @@ public class BooksRequestHandler implements HttpRequestHandler {
     @Override
     public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
         // TODO: validate token
-        if (request.getRequestLine().getMethod().equals("POST")) {
-            handleCreate(request, response, context);
-        } else if (request.getRequestLine().getMethod().equals("GET")) {
-            handleSearch(request, response, context);
+        switch (request.getRequestLine().getMethod()) {
+            case "POST":
+                handleCreate(request, response, context);
+                break;
+            case "GET":
+                handleSearch(request, response, context);
+                break;
+            case "PUT":
+                handleAvailability(request, response, context);
+                break;
         }
     }
 
@@ -132,4 +138,58 @@ public class BooksRequestHandler implements HttpRequestHandler {
         }
     }
 
+    public static class AvailabilityRequestBody {
+        @JsonProperty("Available")
+        public boolean available;
+
+        AvailabilityRequestBody() {}
+
+        AvailabilityRequestBody(Boolean available) {
+            this.available = available;
+        }
+    }
+
+    public void handleAvailability(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+        if (!(request instanceof HttpEntityEnclosingRequest)) {
+            // FIXME: update to align with api spec
+            System.out.println("Failed to cast request into HttpEntityEnclosingRequest");
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
+        }
+        HttpEntityEnclosingRequest entityEnclosingRequest = (HttpEntityEnclosingRequest) request;
+        HttpEntity entity = entityEnclosingRequest.getEntity();
+        ObjectMapper mapper = new ObjectMapper();
+        AvailabilityRequestBody requestBody;
+        try {
+            requestBody = mapper.readValue(entity.getContent(), AvailabilityRequestBody.class);
+        } catch (Exception e) { // parsing failed
+            // FIXME: update to align with api spec
+            e.printStackTrace();
+            System.out.println("Body parsing failed");
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
+        }
+        if (requestBody == null) {
+            // FIXME: update to align with api spec
+            System.out.println("Availability of book not set");
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
+        }
+
+        URI uri = URI.create(request.getRequestLine().getUri());
+        String path = uri.getPath();
+        String idStr = path.substring(path.lastIndexOf('/') + 1);
+        int id = Integer.parseInt(idStr);
+
+        try {
+            DbHelper.getInstance().modifyBookAvailability(id, requestBody.available);
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+        }   catch (DbHelper.ModifyBookNotFoundException e) {
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
+        } catch (Exception e) {
+            e.printStackTrace();
+            // FIXME: update to align with api spec
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        }
+    }
 }

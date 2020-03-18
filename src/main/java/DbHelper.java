@@ -310,4 +310,25 @@ public class DbHelper {
             }
         }
     }
+
+    public static class ModifyBookException extends Exception{
+        ModifyBookException(String s) { super(s); }
+    }
+
+    public static class ModifyBookNotFoundException extends ModifyBookException{
+        ModifyBookNotFoundException(String s) { super(s); }
+    }
+
+    public void modifyBookAvailability(int id, boolean available) throws ModifyBookException {
+        // Try with resources to leverage AutoClosable implementation
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE book SET available = ? WHERE id = ?;")) {
+            stmt.setBoolean(1, available);
+            stmt.setInt(2, id);
+            if (stmt.executeUpdate() <= 0) { // failed
+                throw new ModifyBookNotFoundException("No book record");
+            }
+        } catch (SQLException e) {
+            throw new ModifyBookException(e.getMessage());
+        }
+    }
 }
