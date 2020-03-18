@@ -68,7 +68,17 @@ public class BooksRequestHandler implements HttpRequestHandler {
             response.setHeader(HttpHeaders.LOCATION, "/books/" + id);
         } catch (DbHelper.CreateBookConflictException e) {
             // TODO: get book id and return location
+            int id = -1;
+            try {
+                id = DbHelper.getInstance().findDuplicateBook(requestBody);
+            } catch (Exception e1) {
+                // error while finding duplicate
+                e1.printStackTrace();
+                // FIXME: update to align with api spec
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            }
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CONFLICT);
+            response.setHeader(HttpHeaders.LOCATION, "/books/" + id);
         } catch (Exception e) {
             e.printStackTrace();
             // FIXME: update to align with api spec

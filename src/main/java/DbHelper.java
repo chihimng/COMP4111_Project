@@ -178,6 +178,46 @@ public class DbHelper {
         }
     }
 
+    public static class FindDuplicateBookException extends Exception {
+        FindDuplicateBookException(String s) {
+            super(s);
+        }
+    }
+
+    public static class FindDuplicateNotFoundBookException extends FindDuplicateBookException {
+        FindDuplicateNotFoundBookException(String s) {
+            super(s);
+        }
+    }
+
+
+    public int findDuplicateBook(Book book) throws FindDuplicateBookException {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        try {
+            conn = DriverManager.getConnection(dbUrl);
+            stmt = conn.prepareStatement("SELECT * FROM book WHERE title = ? AND author = ? AND publisher = ? AND year = ?");
+            stmt.setString(1, book.title);
+            stmt.setString(2, book.author);
+            stmt.setString(3, book.publisher);
+            stmt.setInt(4, book.year);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return rs.getInt("id");
+            } else { // failed
+                throw new FindDuplicateNotFoundBookException("duplicate book not found");
+            }
+        } catch (SQLException e) {
+            throw new FindDuplicateBookException(e.getMessage());
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
+            } catch (Exception e) {
+            }
+        }
+    }
+
     public static class SearchBookException extends Exception {
         SearchBookException(String s) {
             super(s);

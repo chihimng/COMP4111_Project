@@ -1,3 +1,4 @@
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class Book {
@@ -22,6 +23,7 @@ public class Book {
         this.year = year;
     }
 
+    @JsonIgnore
     public boolean isValid() {
         return this.title != null && !this.title.isEmpty() &&
                 this.author != null && !this.author.isEmpty() &&
