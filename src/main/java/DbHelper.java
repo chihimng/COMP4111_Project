@@ -66,7 +66,7 @@ public class DbHelper {
         PreparedStatement stmt = null;
         try {
             conn = DriverManager.getConnection(dbUrl);
-            stmt = conn.prepareStatement("INSERT INTO session (username, token) VALUES ((SELECT username FROM user WHERE username = ? AND password = ?), ?)");
+            stmt = conn.prepareStatement("INSERT INTO session (username, token) VALUES ((SELECT username FROM user WHERE username = ? AND password = UNHEX(SHA2(CONCAT(?, salt), 256))), ?)");
             stmt.setString(1, username);
             stmt.setString(2, password);
             stmt.setString(3, token);
