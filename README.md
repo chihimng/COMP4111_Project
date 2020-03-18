@@ -15,3 +15,9 @@ To cleanup (remove all docker data storage and networks):
 ```sh
 docker-compose rm -avs
 ```
+
+## Database schema
+
+See `schema.sql` for initializing schema and batch create user accounts.
+
+Password column is hashed using SHA256 with UUID salt, command to recreate is `UNHEX(SHA2(CONCAT(password, salt), 256))`.
