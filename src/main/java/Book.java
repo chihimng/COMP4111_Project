@@ -11,7 +11,7 @@ public class Book {
     public String publisher;
 
     @JsonProperty("Year")
-    public int year;
+    public Integer year;
 
     Book() {}
 

@@ -1,4 +1,6 @@
 import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 // Notice, do not import com.mysql.jdbc.*
@@ -167,6 +169,99 @@ public class DbHelper {
                 throw new CreateBookConflictException("Duplicate found");
             }
             throw new CreateBookException(e.getMessage());
+        } finally {
+            try {
+                if (stmt != null) stmt.close();
+                if (conn != null) conn.close();
+            } catch (Exception e) {
+            }
+        }
+    }
+
+    public static class SearchBookException extends Exception {
+        SearchBookException(String s) {
+            super(s);
+        }
+    }
+
+    public List<Book> searchBook(String id, String title, String author, String sort, String order, String limit) throws SearchBookException {
+        Connection conn = null;
+        PreparedStatement stmt = null;
+        try {
+            conn = DriverManager.getConnection(dbUrl);
+            List<String> clauses = new ArrayList<String>();
+            String query = "SELECT * FROM book";
+            if (id != null) {
+                clauses.add("id = ?");
+            }
+            if (title != null && !title.isEmpty()) {
+                clauses.add("title LIKE ?");
+            }
+            if (author != null && !author.isEmpty()) {
+                clauses.add("author LIKE ?");
+            }
+            if (!clauses.isEmpty()) {
+                query += " WHERE " + String.join(" AND ", clauses);
+            }
+            if (sort != null && !sort.isEmpty()) {
+                String orderClause = null;
+                if (sort.equals("id")) {
+                    orderClause = "ORDER BY id";
+                } else if (sort.equals("title")) {
+                    orderClause = "ORDER BY title";
+                } else if (sort.equals("author")) {
+                    orderClause = "ORDER BY author";
+                }
+                if (orderClause != null) {
+                    if (order != null) {
+                        if (order.contains("asc")) {
+                            orderClause += " ASC";
+                        } else if (order.contains("desc")) {
+                            orderClause += " DESC";
+                        }
+                    }
+                    query += " " + orderClause;
+                }
+            }
+            if (limit != null && !limit.isEmpty()) {
+                Integer limitCount = null;
+                try {
+                    limitCount = Integer.parseInt(limit);
+                } catch (Exception e) {}
+                if (limitCount != null) {
+                    query += " LIMIT " + limitCount.toString();
+                }
+            }
+            query += ";";
+            System.out.println(clauses.toString());
+            System.out.println(query);
+            stmt = conn.prepareStatement(query);
+            int i = 1;
+            if (query.contains("id = ?")) {
+                stmt.setInt(i, Integer.parseUnsignedInt(id));
+                i += 1;
+            }
+            if (query.contains("title LIKE ?")) {
+                stmt.setString(i, "%" + title + "%");
+                i += 1;
+            }
+            if (query.contains("author LIKE ?")) {
+                stmt.setString(i, "%" + author + "%");
+                i += 1;
+            }
+            ResultSet rs = stmt.executeQuery();
+            List<Book> books = new ArrayList<Book>();
+            while (rs.next()) {
+                books.add(new Book(
+                    rs.getString("title"),
+                    rs.getString("author"),
+                    rs.getString("publisher"),
+                    rs.getInt("year")
+                ));
+            }
+            return books;
+        } catch (SQLException e) {
+            throw new SearchBookException(e.getMessage());
         } finally {
             try {
                 if (stmt != null) stmt.close();
