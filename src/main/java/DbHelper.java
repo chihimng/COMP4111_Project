@@ -331,4 +331,24 @@ public class DbHelper {
             throw new ModifyBookException(e.getMessage());
         }
     }
+
+    public static class DeleteBookException extends Exception{
+        DeleteBookException(String s) { super(s); }
+    }
+
+    public static class DeleteBookNotFoundException extends DeleteBookException{
+        DeleteBookNotFoundException(String s) { super(s); }
+    }
+
+    public void deleteBook(int id) throws DeleteBookException {
+        // Try with resources to leverage AutoClosable implementation
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM book WHERE id = ?;")) {
+            stmt.setInt(1, id);
+            if (stmt.executeUpdate() <= 0) { // failed
+                throw new DeleteBookNotFoundException("No book record");
+            }
+        } catch (SQLException e) {
+            throw new DeleteBookException(e.getMessage());
+        }
+    }
 }

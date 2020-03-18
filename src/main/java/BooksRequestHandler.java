@@ -38,6 +38,9 @@ public class BooksRequestHandler implements HttpRequestHandler {
             case "PUT":
                 handleAvailability(request, response, context);
                 break;
+            case "DELETE":
+                handleDeletion(request, response, context);
+                break;
         }
     }
 
@@ -187,6 +190,26 @@ public class BooksRequestHandler implements HttpRequestHandler {
             System.out.println("Unable to parse number");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
         } catch (DbHelper.ModifyBookNotFoundException e) {
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
+        } catch (Exception e) {
+            e.printStackTrace();
+            // FIXME: update to align with api spec
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    public void handleDeletion(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+        try {
+            URI uri = URI.create(request.getRequestLine().getUri());
+            String path = uri.getPath();
+            String idStr = path.substring(path.lastIndexOf('/') + 1);
+            int id = Integer.parseInt(idStr);
+            DbHelper.getInstance().deleteBook(id);
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+        } catch (NumberFormatException e) {
+            System.out.println("Unable to parse number");
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+        } catch (DbHelper.DeleteBookNotFoundException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
         } catch (Exception e) {
             e.printStackTrace();
