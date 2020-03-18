@@ -176,15 +176,17 @@ public class BooksRequestHandler implements HttpRequestHandler {
             return;
         }
 
-        URI uri = URI.create(request.getRequestLine().getUri());
-        String path = uri.getPath();
-        String idStr = path.substring(path.lastIndexOf('/') + 1);
-        int id = Integer.parseInt(idStr);
-
         try {
+            URI uri = URI.create(request.getRequestLine().getUri());
+            String path = uri.getPath();
+            String idStr = path.substring(path.lastIndexOf('/') + 1);
+            int id = Integer.parseInt(idStr);
             DbHelper.getInstance().modifyBookAvailability(id, requestBody.available);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-        }   catch (DbHelper.ModifyBookNotFoundException e) {
+        } catch (NumberFormatException e) {
+            System.out.println("Unable to parse number");
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+        } catch (DbHelper.ModifyBookNotFoundException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
         } catch (Exception e) {
             e.printStackTrace();
