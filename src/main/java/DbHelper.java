@@ -300,4 +300,8 @@ public class DbHelper {
             throw new DeleteBookException(e.getMessage());
         }
     }
+
+    public void requestTransactionId(String token) {
+
+    }
 }
