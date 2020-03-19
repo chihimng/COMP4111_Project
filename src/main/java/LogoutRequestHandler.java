@@ -28,22 +28,10 @@ public class LogoutRequestHandler implements HttpRequestHandler {
     }
     @Override
     public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        if (!(request instanceof HttpEntityEnclosingRequest)) {
-            // FIXME: update to align with api spec
-            System.out.println("Failed to cast request into HttpEntityEnclosingRequest");
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            return;
-        }
-        HttpEntityEnclosingRequest entityEnclosingRequest = (HttpEntityEnclosingRequest) request;
-        HttpEntity entity = entityEnclosingRequest.getEntity();
-        ObjectMapper mapper = new ObjectMapper();
         RequestBody requestBody;
         try {
-            requestBody = mapper.readValue(entity.getContent(), RequestBody.class);
-        } catch (Exception e) { // parsing failed
-            // FIXME: update to align with api spec
-            e.printStackTrace();
-            System.out.println("Body parsing failed");
+            requestBody = ParsingHelper.parseRequestBody(request, RequestBody.class);
+        } catch (Exception e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
         }
