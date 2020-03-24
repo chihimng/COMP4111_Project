@@ -32,6 +32,15 @@ create table session
 		foreign key (username) references user (username)
 );
 
+create table xid
+(
+	id int not null,
+	formatId int not null,
+	gtrid varchar(32) not null,
+	bqual varchar(32) not null,
+	constraint xid_pk
+		primary key (id)
+);
 
 DELIMITER $$
 CREATE PROCEDURE CreateUser()

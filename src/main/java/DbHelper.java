@@ -1,6 +1,16 @@
+import com.mysql.jdbc.jdbc2.optional.JDBC4MysqlXAConnection;
+import com.mysql.jdbc.jdbc2.optional.MysqlXAConnection;
+import com.mysql.jdbc.jdbc2.optional.MysqlXADataSource;
+import com.sun.org.apache.xerces.internal.impl.dv.util.HexBin;
+
+import javax.sql.XAConnection;
+import javax.transaction.xa.XAResource;
+import javax.transaction.xa.Xid;
+import java.net.Inet4Address;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.UUID;
 
 // Notice, do not import com.mysql.jdbc.*
@@ -10,7 +20,7 @@ public class DbHelper {
     // Singleton
     private static DbHelper _singleton = null;
 
-    public static DbHelper getInstance() throws Exception{
+    public static DbHelper getInstance() throws Exception {
         if (_singleton == null) {
             _singleton = new DbHelper();
         }
@@ -20,7 +30,7 @@ public class DbHelper {
     // Properties & Constructor
     private String dbUrl = "jdbc:mysql://localhost:3306/comp4111?user=comp4111&password=comp4111&useSSL=false";
 
-    private DbHelper() throws Exception{
+    private DbHelper() throws Exception {
         // Import MySQL Driver
         // The newInstance() call is a work around for some broken Java implementations
         Class.forName("com.mysql.jdbc.Driver").newInstance();
@@ -29,7 +39,7 @@ public class DbHelper {
         try {
             String env = System.getenv("DB_URL");
             if (env != null) dbUrl = "jdbc:" + env;
-        } catch ( Exception e ) {
+        } catch (Exception e) {
             System.out.println("Failed to load db host from env, reverting to default");
         }
     }
@@ -51,11 +61,13 @@ public class DbHelper {
             super(s);
         }
     }
+
     public static class SignInConflictException extends SignInException {
         SignInConflictException(String s) {
             super(s);
         }
     }
+
     public static class SignInBadRequestException extends SignInException {
         SignInBadRequestException(String s) {
             super(s);
@@ -117,6 +129,7 @@ public class DbHelper {
             super(s);
         }
     }
+
     public static class CreateBookConflictException extends CreateBookException {
         CreateBookConflictException(String s) {
             super(s);
@@ -248,10 +261,10 @@ public class DbHelper {
             List<Book> books = new ArrayList<Book>();
             while (rs.next()) {
                 books.add(new Book(
-                    rs.getString("title"),
-                    rs.getString("author"),
-                    rs.getString("publisher"),
-                    rs.getInt("year")
+                        rs.getString("title"),
+                        rs.getString("author"),
+                        rs.getString("publisher"),
+                        rs.getInt("year")
                 ));
             }
             return books;
@@ -260,12 +273,16 @@ public class DbHelper {
         }
     }
 
-    public static class ModifyBookException extends Exception{
-        ModifyBookException(String s) { super(s); }
+    public static class ModifyBookException extends Exception {
+        ModifyBookException(String s) {
+            super(s);
+        }
     }
 
-    public static class ModifyBookNotFoundException extends ModifyBookException{
-        ModifyBookNotFoundException(String s) { super(s); }
+    public static class ModifyBookNotFoundException extends ModifyBookException {
+        ModifyBookNotFoundException(String s) {
+            super(s);
+        }
     }
 
     public void modifyBookAvailability(int id, boolean isAvailable) throws ModifyBookException {
@@ -281,8 +298,10 @@ public class DbHelper {
         }
     }
 
-    public static class DeleteBookException extends Exception{
-        DeleteBookException(String s) { super(s); }
+    public static class DeleteBookException extends Exception {
+        DeleteBookException(String s) {
+            super(s);
+        }
     }
 
     public static class DeleteBookNotFoundException extends DeleteBookException{
@@ -301,7 +320,135 @@ public class DbHelper {
         }
     }
 
-    public void requestTransactionId(String token) {
+    public static class TransactionException extends Exception {
+        TransactionException(String s) {
+            super(s);
+        }
+    }
 
+    public static class TransactionNewIdException extends TransactionException {
+        TransactionNewIdException(String s) { super(s); }
+    }
+
+    public int requestTransactionId() throws Exception {
+        MysqlXADataSource xaDataSource = new MysqlXADataSource();
+        xaDataSource.setURL(dbUrl);
+        XAConnection xaConn = xaDataSource.getXAConnection();
+        try (Connection con = xaConn.getConnection(); PreparedStatement stmt = con.prepareStatement("INSERT INTO xid (id,formatId, gtrid, bqual) VALUES (?, ?, ?, ?)")) {
+            // Get a unique Xid object for testing.
+            XAResource xaRes = null;
+            Xid xid = null;
+            xid = XidImpl.getUniqueXid();
+            int txnUniqueID = XidImpl.txnUniqueID;
+
+            // Get the XAResource object and set the timeout value.
+            xaRes = xaConn.getXAResource();
+            xaRes.setTransactionTimeout(0);
+
+            // Perform the XA transaction.
+            System.out.println("Write -> xid = " + xid.toString());
+            xaRes.start(xid, XAResource.TMNOFLAGS);
+            xaRes.end(xid, XAResource.TMSUSPEND);
+            stmt.setInt(1, txnUniqueID);
+            stmt.setInt(2, xid.getFormatId());
+            stmt.setString(3, HexBin.encode(xid.getGlobalTransactionId()));
+            stmt.setString(4, HexBin.encode(xid.getBranchQualifier()));
+            stmt.executeUpdate();
+
+            return txnUniqueID;
+        } catch (SQLException e) {
+            throw new TransactionNewIdException(e.getMessage());
+        } finally {
+            xaConn.close();
+        }
+    }
+}
+
+class XidImpl implements Xid {
+
+    public int formatId;
+    public byte[] gtrid;
+    public byte[] bqual;
+
+    public byte[] getGlobalTransactionId() {
+        return gtrid;
+    }
+
+    public byte[] getBranchQualifier() {
+        return bqual;
+    }
+
+    public int getFormatId() {
+        return formatId;
+    }
+
+    XidImpl(int formatId, byte[] gtrid, byte[] bqual) {
+        this.formatId = formatId;
+        this.gtrid = gtrid;
+        this.bqual = bqual;
+    }
+
+    public String toString() {
+        int hexVal;
+        StringBuffer sb = new StringBuffer(512);
+        sb.append("formatId=" + formatId);
+        sb.append(" gtrid(" + gtrid.length + ")={0x");
+        for (int i = 0; i < gtrid.length; i++) {
+            hexVal = gtrid[i] & 0xFF;
+            if (hexVal < 0x10)
+                sb.append("0" + Integer.toHexString(gtrid[i] & 0xFF));
+            else
+                sb.append(Integer.toHexString(gtrid[i] & 0xFF));
+        }
+        sb.append("} bqual(" + bqual.length + ")={0x");
+        for (int i = 0; i < bqual.length; i++) {
+            hexVal = bqual[i] & 0xFF;
+            if (hexVal < 0x10)
+                sb.append("0" + Integer.toHexString(bqual[i] & 0xFF));
+            else
+                sb.append(Integer.toHexString(bqual[i] & 0xFF));
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    // Returns a globally unique transaction id.
+    static byte[] localIP = null;
+    static int txnUniqueID = 0;
+
+    static Xid getUniqueXid() {
+
+        Random rnd = new Random(System.currentTimeMillis());
+        txnUniqueID++;
+        int txnUID = txnUniqueID;
+        int tidID = 1;
+        int randID = rnd.nextInt();
+        byte[] gtrid = new byte[64];
+        byte[] bqual = new byte[64];
+        if (null == localIP) {
+            try {
+                localIP = Inet4Address.getLocalHost().getAddress();
+            } catch (Exception ex) {
+                localIP = new byte[] {0x01, 0x02, 0x03, 0x04};
+            }
+        }
+        System.arraycopy(localIP, 0, gtrid, 0, 4);
+        System.arraycopy(localIP, 0, bqual, 0, 4);
+
+        // Bytes 4 -> 7 - unique transaction id.
+        // Bytes 8 ->11 - thread id.
+        // Bytes 12->15 - random number generated by using seed from current time in milliseconds.
+        for (int i = 0; i <= 3; i++) {
+            gtrid[i + 4] = (byte) (txnUID % 0x100);
+            bqual[i + 4] = (byte) (txnUID % 0x100);
+            txnUID >>= 8;
+            gtrid[i + 8] = (byte) (tidID % 0x100);
+            bqual[i + 8] = (byte) (tidID % 0x100);
+            tidID >>= 8;
+            gtrid[i + 12] = (byte) (randID % 0x100);
+            bqual[i + 12] = (byte) (randID % 0x100);
+            randID >>= 8;
+        }
+        return new XidImpl(0x1234, gtrid, bqual);
     }
 }

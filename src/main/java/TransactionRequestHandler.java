@@ -1,5 +1,8 @@
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.*;
+import org.apache.http.entity.ContentType;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpRequestHandler;
 
@@ -43,9 +46,21 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         }
     }
 
+    public static class TransactionIdResponseBody {
+        @JsonProperty("Transaction")
+        public int transactionId;
+
+        TransactionIdResponseBody() {}
+
+        TransactionIdResponseBody(int transactionId) {
+            this.transactionId = transactionId;
+        }
+    }
+
     public void handleTransactionManagement(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
         try {
             HttpEntityEnclosingRequest entityEnclosingRequest = ParsingHelper.castHttpEntityRequest(request);
+            // If POST body has no content, request new transaction ID
             if(entityEnclosingRequest.getEntity().getContent().available() == 0) {
                 handleRequestTransaction(request, response, context);
             } else {
@@ -57,7 +72,23 @@ public class TransactionRequestHandler implements HttpRequestHandler {
     }
 
     public void handleRequestTransaction(HttpRequest request, HttpResponse response, HttpContext context) {
-        System.out.println("request");
+        try {
+            TransactionIdResponseBody responseBody = new TransactionIdResponseBody(DbHelper.getInstance().requestTransactionId());
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+            ObjectMapper mapper = new ObjectMapper();
+            StringEntity body = new StringEntity(
+                    mapper.writeValueAsString(responseBody),
+                    ContentType.APPLICATION_JSON
+            );
+            response.setEntity(body);
+        } catch (DbHelper.TransactionException e) {
+            e.printStackTrace();
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // FIXME: update to align with api spec
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        }
     }
 
     public void handleTransactionAction(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
