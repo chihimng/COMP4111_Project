@@ -1,13 +1,7 @@
-import com.mysql.jdbc.jdbc2.optional.MysqlXADataSource;
-
-import javax.sql.XAConnection;
-import javax.transaction.xa.XAException;
-import javax.transaction.xa.XAResource;
-import javax.transaction.xa.Xid;
 import java.sql.*;
 import java.time.Instant;
-import java.util.*;
 import java.util.Date;
+import java.util.*;
 
 // Notice, do not import com.mysql.jdbc.*
 // or you will have problems!
