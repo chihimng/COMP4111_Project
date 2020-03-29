@@ -268,10 +268,10 @@ public class DbHelper {
         ModifyBookNotFoundException(String s) { super(s); }
     }
 
-    public void modifyBookAvailability(int id, boolean available) throws ModifyBookException {
+    public void modifyBookAvailability(int id, boolean isAvailable) throws ModifyBookException {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE book SET available = ? WHERE id = ?;")) {
-            stmt.setBoolean(1, available);
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ?;")) {
+            stmt.setBoolean(1, isAvailable);
             stmt.setInt(2, id);
             if (stmt.executeUpdate() <= 0) { // failed
                 throw new ModifyBookNotFoundException("No book record");

@@ -1,4 +1,3 @@
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.*;
@@ -143,12 +142,12 @@ public class BooksRequestHandler implements HttpRequestHandler {
 
     public static class AvailabilityRequestBody {
         @JsonProperty("Available")
-        public boolean available;
+        public boolean isAvailable;
 
         AvailabilityRequestBody() {}
 
-        AvailabilityRequestBody(Boolean available) {
-            this.available = available;
+        AvailabilityRequestBody(Boolean isAvailable) {
+            this.isAvailable = isAvailable;
         }
     }
 
@@ -184,7 +183,7 @@ public class BooksRequestHandler implements HttpRequestHandler {
             String path = uri.getPath();
             String idStr = path.substring(path.lastIndexOf('/') + 1);
             int id = Integer.parseInt(idStr);
-            DbHelper.getInstance().modifyBookAvailability(id, requestBody.available);
+            DbHelper.getInstance().modifyBookAvailability(id, requestBody.isAvailable);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
         } catch (NumberFormatException e) {
             System.out.println("Unable to parse number");
