@@ -40,6 +40,8 @@ public class BooksRequestHandler implements HttpRequestHandler {
             case "DELETE":
                 handleDeletion(request, response, context);
                 break;
+            default:
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
         }
     }
 
