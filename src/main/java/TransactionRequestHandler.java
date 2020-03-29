@@ -17,7 +17,7 @@ public class TransactionRequestHandler implements HttpRequestHandler {
                 handleTransactionManagement(request, response, context);
                 break;
             case "PUT":
-                handleTransactionTask(request, response, context);
+                handleTransactionAction(request, response, context);
                 break;
         }
     }
@@ -30,19 +30,47 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         CANCEL;
     }
 
-    public static class TransactionRequestBody {
+    public static class TransactionPostRequestBody {
         @JsonProperty("Transaction")
         public int transactionId;
 
         @JsonProperty("Operation")
-        public TransactionOperation transactionOperation;
+        public TransactionOperation operation;
 
-        TransactionRequestBody() {
+        TransactionPostRequestBody() {
         }
 
-        TransactionRequestBody(int id, TransactionOperation operation) {
+        TransactionPostRequestBody(int id, TransactionOperation operation) {
             this.transactionId = id;
-            this.transactionOperation = operation;
+            this.operation = operation;
+        }
+    }
+
+    public enum TransactionPutAction {
+        @JsonProperty("loan")
+        LOAN,
+
+        @JsonProperty("return")
+        RETURN;
+    }
+
+    public static class TransactionPutRequestBody {
+        @JsonProperty("Transaction")
+        public int transactionId;
+
+        @JsonProperty("Book")
+        public int bookId;
+
+        @JsonProperty("Action")
+        public TransactionPutAction action;
+
+        TransactionPutRequestBody() {
+        }
+
+        TransactionPutRequestBody(int transactionId, int bookId, TransactionPutAction action) {
+            this.transactionId = transactionId;
+            this.bookId = bookId;
+            this.action = action;
         }
     }
 
@@ -64,7 +92,7 @@ public class TransactionRequestHandler implements HttpRequestHandler {
             if(entityEnclosingRequest.getEntity().getContent().available() == 0) {
                 handleRequestTransaction(request, response, context);
             } else {
-                handleTransactionAction(request, response, context);
+                handleTransactionOpearation(request, response, context);
             }
         } catch (ClassCastException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
@@ -92,12 +120,11 @@ public class TransactionRequestHandler implements HttpRequestHandler {
     }
 
     public void handleTransactionAction(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-
         HttpEntityEnclosingRequest entityEnclosingRequest = ParsingHelper.castHttpEntityRequest(request);
 
-        TransactionRequestBody requestBody;
+        TransactionPutRequestBody requestBody;
         try {
-            requestBody = ParsingHelper.parseRequestBody(request, TransactionRequestBody.class);
+            requestBody = ParsingHelper.parseRequestBody(request, TransactionPutRequestBody.class);
         } catch (Exception e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
@@ -109,10 +136,44 @@ public class TransactionRequestHandler implements HttpRequestHandler {
             return;
         }
 
-        //TODO;
+        try {
+            DbHelper.getInstance().performTransactionAction(requestBody);
+        } catch (DbHelper.TransactionException | DbHelper.ModifyBookNotFoundException e) {
+            e.printStackTrace();
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // FIXME: update to align with api spec
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        }
     }
 
-    public void handleTransactionTask(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleTransactionOpearation(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+        HttpEntityEnclosingRequest entityEnclosingRequest = ParsingHelper.castHttpEntityRequest(request);
 
+        TransactionPostRequestBody requestBody;
+        try {
+            requestBody = ParsingHelper.parseRequestBody(request, TransactionPostRequestBody.class);
+        } catch (Exception e) {
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
+        }
+
+        if (requestBody == null) {
+            System.out.println("Request body is null");
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
+        }
+
+        try {
+            DbHelper.getInstance().performTransactionOperation(requestBody);
+        } catch (DbHelper.TransactionException e) {
+            e.printStackTrace();
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+        } catch (Exception e) {
+            e.printStackTrace();
+            // FIXME: update to align with api spec
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        }
     }
 }

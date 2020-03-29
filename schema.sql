@@ -32,13 +32,12 @@ create table session
 		foreign key (username) references user (username)
 );
 
-create table xid
+create table transaction
 (
-	id int not null,
-	formatId int not null,
-	gtrid varchar(32) not null,
-	bqual varchar(32) not null,
-	constraint xid_pk
+	id smallint auto_increment,
+	timestamp timestamp not null,
+	statement varchar(8000) not null,
+	constraint transaction_pk
 		primary key (id)
 );
 

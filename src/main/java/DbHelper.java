@@ -1,17 +1,13 @@
-import com.mysql.jdbc.jdbc2.optional.JDBC4MysqlXAConnection;
-import com.mysql.jdbc.jdbc2.optional.MysqlXAConnection;
 import com.mysql.jdbc.jdbc2.optional.MysqlXADataSource;
-import com.sun.org.apache.xerces.internal.impl.dv.util.HexBin;
 
 import javax.sql.XAConnection;
+import javax.transaction.xa.XAException;
 import javax.transaction.xa.XAResource;
 import javax.transaction.xa.Xid;
-import java.net.Inet4Address;
 import java.sql.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
-import java.util.UUID;
+import java.time.Instant;
+import java.util.*;
+import java.util.Date;
 
 // Notice, do not import com.mysql.jdbc.*
 // or you will have problems!
@@ -29,6 +25,7 @@ public class DbHelper {
 
     // Properties & Constructor
     private String dbUrl = "jdbc:mysql://localhost:3306/comp4111?user=comp4111&password=comp4111&useSSL=false";
+    private static int TRANSACTION_TIMEOUT_SECONDS = 120;
 
     private DbHelper() throws Exception {
         // Import MySQL Driver
@@ -76,7 +73,7 @@ public class DbHelper {
 
     public String signIn(String username, String password) throws SignInException {
         String token = UUID.randomUUID().toString();
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO session (username, token) VALUES ((SELECT username FROM user WHERE username = ? AND password = UNHEX(SHA2(CONCAT(?, salt), 256))), ?)")){
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO session (username, token) VALUES ((SELECT username FROM user WHERE username = ? AND password = UNHEX(SHA2(CONCAT(?, salt), 256))), ?)")) {
             stmt.setString(1, username);
             stmt.setString(2, password);
             stmt.setString(3, token);
@@ -112,7 +109,7 @@ public class DbHelper {
     }
 
     public boolean signOut(String token) throws SignOutException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM session WHERE token = ?;")){
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM session WHERE token = ?;")) {
             stmt.setString(1, token);
             if (stmt.executeUpdate() > 0) { // success
                 return true;
@@ -235,7 +232,8 @@ public class DbHelper {
             Integer limitCount = null;
             try {
                 limitCount = Integer.parseInt(limit);
-            } catch (Exception e) {}
+            } catch (Exception e) {
+            }
             if (limitCount != null) {
                 query += " LIMIT " + limitCount.toString();
             }
@@ -243,7 +241,7 @@ public class DbHelper {
         query += ";";
         System.out.println(clauses.toString());
         System.out.println(query);
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement(query)){
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement(query)) {
             int i = 1;
             if (query.contains("id = ?")) {
                 stmt.setInt(i, Integer.parseUnsignedInt(id));
@@ -304,8 +302,10 @@ public class DbHelper {
         }
     }
 
-    public static class DeleteBookNotFoundException extends DeleteBookException{
-        DeleteBookNotFoundException(String s) { super(s); }
+    public static class DeleteBookNotFoundException extends DeleteBookException {
+        DeleteBookNotFoundException(String s) {
+            super(s);
+        }
     }
 
     public void deleteBook(int id) throws DeleteBookException {
@@ -326,129 +326,69 @@ public class DbHelper {
         }
     }
 
-    public static class TransactionNewIdException extends TransactionException {
-        TransactionNewIdException(String s) { super(s); }
+    public static class TransactionIdNotFoundException extends TransactionException {
+        TransactionIdNotFoundException(String s) {
+            super(s);
+        }
     }
 
     public int requestTransactionId() throws Exception {
-        MysqlXADataSource xaDataSource = new MysqlXADataSource();
-        xaDataSource.setURL(dbUrl);
-        XAConnection xaConn = xaDataSource.getXAConnection();
-        try (Connection con = xaConn.getConnection(); PreparedStatement stmt = con.prepareStatement("INSERT INTO xid (id,formatId, gtrid, bqual) VALUES (?, ?, ?, ?)")) {
-            // Get a unique Xid object for testing.
-            XAResource xaRes = null;
-            Xid xid = null;
-            xid = XidImpl.getUniqueXid();
-            int txnUniqueID = XidImpl.txnUniqueID;
-
-            // Get the XAResource object and set the timeout value.
-            xaRes = xaConn.getXAResource();
-            xaRes.setTransactionTimeout(0);
-
-            // Perform the XA transaction.
-            System.out.println("Write -> xid = " + xid.toString());
-            xaRes.start(xid, XAResource.TMNOFLAGS);
-            xaRes.end(xid, XAResource.TMSUSPEND);
-            stmt.setInt(1, txnUniqueID);
-            stmt.setInt(2, xid.getFormatId());
-            stmt.setString(3, HexBin.encode(xid.getGlobalTransactionId()));
-            stmt.setString(4, HexBin.encode(xid.getBranchQualifier()));
-            stmt.executeUpdate();
-
-            return txnUniqueID;
-        } catch (SQLException e) {
-            throw new TransactionNewIdException(e.getMessage());
-        } finally {
-            xaConn.close();
-        }
-    }
-}
-
-class XidImpl implements Xid {
-
-    public int formatId;
-    public byte[] gtrid;
-    public byte[] bqual;
-
-    public byte[] getGlobalTransactionId() {
-        return gtrid;
-    }
-
-    public byte[] getBranchQualifier() {
-        return bqual;
-    }
-
-    public int getFormatId() {
-        return formatId;
-    }
-
-    XidImpl(int formatId, byte[] gtrid, byte[] bqual) {
-        this.formatId = formatId;
-        this.gtrid = gtrid;
-        this.bqual = bqual;
-    }
-
-    public String toString() {
-        int hexVal;
-        StringBuffer sb = new StringBuffer(512);
-        sb.append("formatId=" + formatId);
-        sb.append(" gtrid(" + gtrid.length + ")={0x");
-        for (int i = 0; i < gtrid.length; i++) {
-            hexVal = gtrid[i] & 0xFF;
-            if (hexVal < 0x10)
-                sb.append("0" + Integer.toHexString(gtrid[i] & 0xFF));
-            else
-                sb.append(Integer.toHexString(gtrid[i] & 0xFF));
-        }
-        sb.append("} bqual(" + bqual.length + ")={0x");
-        for (int i = 0; i < bqual.length; i++) {
-            hexVal = bqual[i] & 0xFF;
-            if (hexVal < 0x10)
-                sb.append("0" + Integer.toHexString(bqual[i] & 0xFF));
-            else
-                sb.append(Integer.toHexString(bqual[i] & 0xFF));
-        }
-        sb.append("}");
-        return sb.toString();
-    }
-
-    // Returns a globally unique transaction id.
-    static byte[] localIP = null;
-    static int txnUniqueID = 0;
-
-    static Xid getUniqueXid() {
-
-        Random rnd = new Random(System.currentTimeMillis());
-        txnUniqueID++;
-        int txnUID = txnUniqueID;
-        int tidID = 1;
-        int randID = rnd.nextInt();
-        byte[] gtrid = new byte[64];
-        byte[] bqual = new byte[64];
-        if (null == localIP) {
-            try {
-                localIP = Inet4Address.getLocalHost().getAddress();
-            } catch (Exception ex) {
-                localIP = new byte[] {0x01, 0x02, 0x03, 0x04};
+        // Try with resources to leverage AutoClosable implementation
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (timestamp , statement) VALUES (?, ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
+            stmt.setTimestamp(1, Timestamp.from(Instant.now().plusSeconds(120)));
+            stmt.setString(2, "");
+            if (stmt.executeUpdate() > 0) { // success
+                ResultSet rs = getIdStmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getInt(1);
+                } else {
+                    throw new TransactionException("failed to get last inserted id");
+                }
+            } else { // failed
+                throw new TransactionException("this should now happen: updated 0 rows without exception");
             }
+        } catch (SQLException e) {
+            throw new TransactionException(e.getMessage());
         }
-        System.arraycopy(localIP, 0, gtrid, 0, 4);
-        System.arraycopy(localIP, 0, bqual, 0, 4);
+    }
 
-        // Bytes 4 -> 7 - unique transaction id.
-        // Bytes 8 ->11 - thread id.
-        // Bytes 12->15 - random number generated by using seed from current time in milliseconds.
-        for (int i = 0; i <= 3; i++) {
-            gtrid[i + 4] = (byte) (txnUID % 0x100);
-            bqual[i + 4] = (byte) (txnUID % 0x100);
-            txnUID >>= 8;
-            gtrid[i + 8] = (byte) (tidID % 0x100);
-            bqual[i + 8] = (byte) (tidID % 0x100);
-            tidID >>= 8;
-            gtrid[i + 12] = (byte) (randID % 0x100);
-            bqual[i + 12] = (byte) (randID % 0x100);
-            randID >>= 8;
+    public void performTransactionAction(TransactionRequestHandler.TransactionPutRequestBody request) throws Exception {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET timestamp = ?, statement = CONCAT(statement, ?) WHERE id = ?")) {
+            int isAvailable = request.action == TransactionRequestHandler.TransactionPutAction.LOAN ? 0 : 1;
+            stmt.setTimestamp(1, Timestamp.from(Instant.now().plusSeconds(120)));
+            stmt.setString(2, String.format("UPDATE book SET isAvailable = %d WHERE id = %d;", isAvailable, request.bookId));
+            stmt.setInt(3, request.transactionId);
+
+            if (stmt.executeUpdate() <= 0) { // failed
+                throw new TransactionIdNotFoundException("Transaction not found");
+            }
+        } catch (SQLException e) {
+            throw new TransactionException(e.getMessage());
         }
-        return new XidImpl(0x1234, gtrid, bqual);
+    }
+
+    public void performTransactionOperation(TransactionRequestHandler.TransactionPostRequestBody request) throws Exception {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ?"); PreparedStatement deleteStmt = conn.prepareStatement("DELETE FROM transaction WHERE id = ?")) {
+            stmt.setInt(1, request.transactionId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) { // failed
+                if (request.operation == TransactionRequestHandler.TransactionOperation.COMMIT && rs.getTimestamp("timestamp").after(Date.from(Instant.now()))) {
+                    String statement = rs.getString("statement");
+                    System.out.println(statement);
+                    PreparedStatement commitStmt = conn.prepareStatement(statement);
+                    conn.setAutoCommit(false);
+                    commitStmt.executeUpdate();
+                    conn.setAutoCommit(true);
+                }
+                deleteStmt.setInt(1, request.transactionId);
+                if (deleteStmt.executeUpdate() <= 0) { // failed
+                    throw new TransactionIdNotFoundException("Transaction not found"); // This shouldn't happen
+                }
+            } else {
+                throw new TransactionIdNotFoundException("Transaction not found");
+            }
+        } catch (SQLException e) {
+            throw new TransactionException(e.getMessage());
+        }
     }
 }
