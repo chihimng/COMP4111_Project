@@ -332,6 +332,12 @@ public class DbHelper {
         }
     }
 
+    public static class TransactionExpiredException extends TransactionException {
+        TransactionExpiredException(String s) {
+            super(s);
+        }
+    }
+
     public int requestTransactionId() throws Exception {
         // Try with resources to leverage AutoClosable implementation
         try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (timestamp , statement) VALUES (?, ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
@@ -371,18 +377,28 @@ public class DbHelper {
         try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ?"); PreparedStatement deleteStmt = conn.prepareStatement("DELETE FROM transaction WHERE id = ?")) {
             stmt.setInt(1, request.transactionId);
             ResultSet rs = stmt.executeQuery();
-            if (rs.next()) { // failed
-                if (request.operation == TransactionRequestHandler.TransactionOperation.COMMIT && rs.getTimestamp("timestamp").after(Date.from(Instant.now()))) {
-                    String statement = rs.getString("statement");
-                    System.out.println(statement);
-                    PreparedStatement commitStmt = conn.prepareStatement(statement);
-                    conn.setAutoCommit(false);
-                    commitStmt.executeUpdate();
-                    conn.setAutoCommit(true);
-                }
+            if (rs.next()) {
                 deleteStmt.setInt(1, request.transactionId);
                 if (deleteStmt.executeUpdate() <= 0) { // failed
                     throw new TransactionIdNotFoundException("Transaction not found"); // This shouldn't happen
+                }
+                if (request.operation == TransactionRequestHandler.TransactionOperation.COMMIT) {
+                    if(rs.getTimestamp("timestamp").before(Date.from(Instant.now()))) {
+                        throw new TransactionExpiredException("Transaction expired");
+                    }
+                    ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
+                    ArrayList<PreparedStatement> stmts = new ArrayList<>();
+                    for (String s : statement) {
+                        stmts.add(conn.prepareStatement(s));
+                    }
+                    conn.setAutoCommit(false);
+                    for (PreparedStatement ps : stmts) {
+                        ps.executeUpdate();
+                    }
+                    conn.setAutoCommit(true);
+                    for (PreparedStatement ps : stmts) {
+                        ps.close();
+                    }
                 }
             } else {
                 throw new TransactionIdNotFoundException("Transaction not found");
