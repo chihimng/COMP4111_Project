@@ -8,6 +8,7 @@ create table book
 	author varchar(128) not null,
 	publisher varchar(128) not null,
 	year smallint unsigned not null,
+	isAvailable boolean default true not null,
 	constraint book_pk_2
 		unique (title, author, publisher, year)
 );
