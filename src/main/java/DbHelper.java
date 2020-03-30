@@ -1,3 +1,5 @@
+import com.mysql.jdbc.JDBC4PreparedStatement;
+
 import javax.swing.plaf.nimbus.State;
 import java.sql.*;
 import java.time.Instant;
@@ -355,8 +357,13 @@ public class DbHelper {
 
     public void performTransactionAction(String token, TransactionRequestHandler.TransactionPutRequestBody request) throws Exception {
         try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ?")) {
-            int isAvailable = request.action == TransactionRequestHandler.TransactionPutAction.LOAN ? 0 : 1;
-            stmt.setString(1, String.format("UPDATE book SET isAvailable = %d WHERE id = %d;", isAvailable, request.bookId));
+            PreparedStatement saveStmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ?");
+            saveStmt.setBoolean(1, request.action == TransactionRequestHandler.TransactionPutAction.RETURN);
+            saveStmt.setInt(2, request.bookId);
+
+            String saveStmtSql = ((JDBC4PreparedStatement)saveStmt).asSql();
+            System.out.println(saveStmtSql);
+            stmt.setString(1, saveStmtSql);
             stmt.setInt(2, request.transactionId);
             stmt.setString(3, token);
             if (stmt.executeUpdate() <= 0) { // failed
