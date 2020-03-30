@@ -21,6 +21,8 @@ public class TransactionRequestHandler implements HttpRequestHandler {
             case "PUT":
                 handleTransactionAction(request, response, context);
                 break;
+            default:
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
         }
     }
 
@@ -103,15 +105,7 @@ public class TransactionRequestHandler implements HttpRequestHandler {
 
     public void handleRequestTransaction(HttpRequest request, HttpResponse response, HttpContext context) {
         try {
-            URI uri = URI.create(request.getRequestLine().getUri());
-            String query = uri.getRawQuery();
-            String token = "";
-            if (query != null) {
-                String[] split = query.split("=");
-                if (split.length >= 2 && split[0].equals("token")) {
-                    token = split[1];
-                }
-            }
+            String token = ParsingHelper.getTokenFromRequest(request);
             TransactionIdResponseBody responseBody = new TransactionIdResponseBody(DbHelper.getInstance().requestTransactionId(token));
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
             ObjectMapper mapper = new ObjectMapper();
@@ -131,9 +125,8 @@ public class TransactionRequestHandler implements HttpRequestHandler {
     }
 
     public void handleTransactionAction(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        HttpEntityEnclosingRequest entityEnclosingRequest = ParsingHelper.castHttpEntityRequest(request);
-
         TransactionPutRequestBody requestBody;
+        String token = ParsingHelper.getTokenFromRequest(request);
         try {
             requestBody = ParsingHelper.parseRequestBody(request, TransactionPutRequestBody.class);
         } catch (Exception e) {
@@ -148,7 +141,7 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         }
 
         try {
-            DbHelper.getInstance().performTransactionAction(requestBody);
+            DbHelper.getInstance().performTransactionAction(token, requestBody);
         } catch (DbHelper.TransactionException | DbHelper.ModifyBookNotFoundException e) {
             e.printStackTrace();
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
@@ -160,9 +153,9 @@ public class TransactionRequestHandler implements HttpRequestHandler {
     }
 
     public void handleTransactionOperation(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        HttpEntityEnclosingRequest entityEnclosingRequest = ParsingHelper.castHttpEntityRequest(request);
-
         TransactionPostRequestBody requestBody;
+        String token = ParsingHelper.getTokenFromRequest(request);
+
         try {
             requestBody = ParsingHelper.parseRequestBody(request, TransactionPostRequestBody.class);
         } catch (Exception e) {
@@ -177,7 +170,7 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         }
 
         try {
-            DbHelper.getInstance().performTransactionOperation(requestBody);
+            DbHelper.getInstance().performTransactionOperation(token, requestBody);
         } catch (DbHelper.TransactionException e) {
             e.printStackTrace();
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);

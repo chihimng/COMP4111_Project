@@ -1,3 +1,4 @@
+import javax.swing.plaf.nimbus.State;
 import java.sql.*;
 import java.time.Instant;
 import java.util.Date;
@@ -352,12 +353,12 @@ public class DbHelper {
         }
     }
 
-    public void performTransactionAction(TransactionRequestHandler.TransactionPutRequestBody request) throws Exception {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ?")) {
+    public void performTransactionAction(String token, TransactionRequestHandler.TransactionPutRequestBody request) throws Exception {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ?")) {
             int isAvailable = request.action == TransactionRequestHandler.TransactionPutAction.LOAN ? 0 : 1;
             stmt.setString(1, String.format("UPDATE book SET isAvailable = %d WHERE id = %d;", isAvailable, request.bookId));
             stmt.setInt(2, request.transactionId);
-
+            stmt.setString(3, token);
             if (stmt.executeUpdate() <= 0) { // failed
                 throw new TransactionIdNotFoundException("Transaction not found");
             }
@@ -366,9 +367,10 @@ public class DbHelper {
         }
     }
 
-    public void performTransactionOperation(TransactionRequestHandler.TransactionPostRequestBody request) throws Exception {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ?"); PreparedStatement deleteStmt = conn.prepareStatement("DELETE FROM transaction WHERE id = ?")) {
+    public void performTransactionOperation(String token, TransactionRequestHandler.TransactionPostRequestBody request) throws Exception {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ? AND token = ?"); PreparedStatement deleteStmt = conn.prepareStatement("DELETE FROM transaction WHERE id = ?")) {
             stmt.setInt(1, request.transactionId);
+            stmt.setString(2, token);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 deleteStmt.setInt(1, request.transactionId);
@@ -379,19 +381,16 @@ public class DbHelper {
                     if(rs.getTimestamp("last_modified").before(Date.from(Instant.now().minusSeconds(120)))) { // 2 minutes timeout
                         throw new TransactionExpiredException("Transaction expired");
                     }
-                    ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
-                    ArrayList<PreparedStatement> stmts = new ArrayList<>();
-                    for (String s : statement) {
-                        stmts.add(conn.prepareStatement(s));
-                    }
-                    conn.setAutoCommit(false);
-                    for (PreparedStatement ps : stmts) {
-                        ps.executeUpdate();
-                    }
-                    conn.setAutoCommit(true);
-                    for (PreparedStatement ps : stmts) {
-                        ps.close();
-                    }
+                    conn.prepareStatement(String.format("START TRANSACTION; %s COMMIT;", rs.getString("statement"))).executeBatch();
+
+//                    ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
+//                    Statement commitStmt = conn.createStatement();
+//                    conn.setAutoCommit(false);
+//                    for(String s : statement) {
+//                        commitStmt.addBatch(s);
+//                    }
+//                    commitStmt.executeBatch();
+//                    conn.commit();
                 }
             } else {
                 throw new TransactionIdNotFoundException("Transaction not found");
