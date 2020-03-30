@@ -361,7 +361,7 @@ public class DbHelper {
             saveStmt.setBoolean(1, request.action == TransactionRequestHandler.TransactionPutAction.RETURN);
             saveStmt.setInt(2, request.bookId);
 
-            String saveStmtSql = ((JDBC4PreparedStatement)saveStmt).asSql();
+            String saveStmtSql = ((JDBC4PreparedStatement)saveStmt).asSql() + ";";
             System.out.println(saveStmtSql);
             stmt.setString(1, saveStmtSql);
             stmt.setInt(2, request.transactionId);
@@ -386,18 +386,17 @@ public class DbHelper {
                 }
                 if (request.operation == TransactionRequestHandler.TransactionOperation.COMMIT) {
                     if(rs.getTimestamp("last_modified").before(Date.from(Instant.now().minusSeconds(120)))) { // 2 minutes timeout
+                        System.out.println("Expired");
                         throw new TransactionExpiredException("Transaction expired");
                     }
-                    conn.prepareStatement(String.format("START TRANSACTION; %s COMMIT;", rs.getString("statement"))).executeBatch();
-
-//                    ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
-//                    Statement commitStmt = conn.createStatement();
-//                    conn.setAutoCommit(false);
-//                    for(String s : statement) {
-//                        commitStmt.addBatch(s);
-//                    }
-//                    commitStmt.executeBatch();
-//                    conn.commit();
+                    ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
+                    Statement commitStmt = conn.createStatement();
+                    conn.setAutoCommit(false);
+                    for(String s : statement) {
+                        commitStmt.addBatch(s);
+                    }
+                    commitStmt.executeBatch();
+                    conn.commit();
                 }
             } else {
                 throw new TransactionIdNotFoundException("Transaction not found");
