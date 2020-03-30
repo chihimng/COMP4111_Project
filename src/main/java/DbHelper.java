@@ -1,4 +1,5 @@
 import com.mysql.jdbc.JDBC4PreparedStatement;
+import com.mysql.jdbc.exceptions.jdbc4.MySQLSyntaxErrorException;
 
 import javax.swing.plaf.nimbus.State;
 import java.sql.*;
@@ -335,6 +336,12 @@ public class DbHelper {
         }
     }
 
+    public static class TransactionRejectedException extends TransactionException {
+        TransactionRejectedException(String s) {
+            super(s);
+        }
+    }
+
     public int requestTransactionId(String token) throws Exception {
         // Try with resources to leverage AutoClosable implementation
         try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (last_modified , statement, token) VALUES (NOW(), ?, ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
@@ -401,6 +408,8 @@ public class DbHelper {
             } else {
                 throw new TransactionIdNotFoundException("Transaction not found");
             }
+        } catch (MySQLSyntaxErrorException e) {
+            throw new TransactionRejectedException(e.getMessage());
         } catch (SQLException e) {
             throw new TransactionException(e.getMessage());
         }
