@@ -99,18 +99,7 @@ public class BooksRequestHandler implements HttpRequestHandler {
     }
 
     public void handleSearch(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        Map<String, String> param = new HashMap<String, String>();
-
-        URI uri = URI.create(request.getRequestLine().getUri());
-        String query = uri.getRawQuery();
-        if (query != null) {
-            for (String pair : query.split("&")) {
-                String[] split = pair.split("=");
-                if (split.length >= 2) {
-                    param.put(URLDecoder.decode(split[0], "UTF-8"), URLDecoder.decode(split[1], "UTF-8"));
-                }
-            }
-        }
+        Map<String, String> param = ParsingHelper.parseRequestQuery(request);
 
         try {
             response.setStatusCode(HttpStatus.SC_CREATED);
