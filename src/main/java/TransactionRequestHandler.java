@@ -7,6 +7,8 @@ import org.apache.http.protocol.HttpContext;
 import org.apache.http.protocol.HttpRequestHandler;
 
 import java.io.IOException;
+import java.net.URI;
+import java.net.URLDecoder;
 
 public class TransactionRequestHandler implements HttpRequestHandler {
     @Override
@@ -92,7 +94,7 @@ public class TransactionRequestHandler implements HttpRequestHandler {
             if(entityEnclosingRequest.getEntity().getContent().available() == 0) {
                 handleRequestTransaction(request, response, context);
             } else {
-                handleTransactionOpearation(request, response, context);
+                handleTransactionOperation(request, response, context);
             }
         } catch (ClassCastException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
@@ -101,7 +103,16 @@ public class TransactionRequestHandler implements HttpRequestHandler {
 
     public void handleRequestTransaction(HttpRequest request, HttpResponse response, HttpContext context) {
         try {
-            TransactionIdResponseBody responseBody = new TransactionIdResponseBody(DbHelper.getInstance().requestTransactionId());
+            URI uri = URI.create(request.getRequestLine().getUri());
+            String query = uri.getRawQuery();
+            String token = "";
+            if (query != null) {
+                String[] split = query.split("=");
+                if (split.length >= 2 && split[0].equals("token")) {
+                    token = split[1];
+                }
+            }
+            TransactionIdResponseBody responseBody = new TransactionIdResponseBody(DbHelper.getInstance().requestTransactionId(token));
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
             ObjectMapper mapper = new ObjectMapper();
             StringEntity body = new StringEntity(
@@ -148,7 +159,7 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         }
     }
 
-    public void handleTransactionOpearation(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleTransactionOperation(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
         HttpEntityEnclosingRequest entityEnclosingRequest = ParsingHelper.castHttpEntityRequest(request);
 
         TransactionPostRequestBody requestBody;

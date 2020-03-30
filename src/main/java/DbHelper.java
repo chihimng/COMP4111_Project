@@ -332,10 +332,11 @@ public class DbHelper {
         }
     }
 
-    public int requestTransactionId() throws Exception {
+    public int requestTransactionId(String token) throws Exception {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (last_modified , statement) VALUES (NOW(), ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (last_modified , statement, token) VALUES (NOW(), ?, ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
             stmt.setString(1, "");
+            stmt.setString(2, token);
             if (stmt.executeUpdate() > 0) { // success
                 ResultSet rs = getIdStmt.executeQuery();
                 if (rs.next()) {
