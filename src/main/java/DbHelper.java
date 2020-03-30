@@ -334,9 +334,8 @@ public class DbHelper {
 
     public int requestTransactionId() throws Exception {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (timestamp , statement) VALUES (?, ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
-            stmt.setTimestamp(1, Timestamp.from(Instant.now().plusSeconds(120)));
-            stmt.setString(2, "");
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (last_modified , statement) VALUES (NOW(), ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
+            stmt.setString(1, "");
             if (stmt.executeUpdate() > 0) { // success
                 ResultSet rs = getIdStmt.executeQuery();
                 if (rs.next()) {
@@ -353,11 +352,10 @@ public class DbHelper {
     }
 
     public void performTransactionAction(TransactionRequestHandler.TransactionPutRequestBody request) throws Exception {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET timestamp = ?, statement = CONCAT(statement, ?) WHERE id = ?")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ?")) {
             int isAvailable = request.action == TransactionRequestHandler.TransactionPutAction.LOAN ? 0 : 1;
-            stmt.setTimestamp(1, Timestamp.from(Instant.now().plusSeconds(120)));
-            stmt.setString(2, String.format("UPDATE book SET isAvailable = %d WHERE id = %d;", isAvailable, request.bookId));
-            stmt.setInt(3, request.transactionId);
+            stmt.setString(1, String.format("UPDATE book SET isAvailable = %d WHERE id = %d;", isAvailable, request.bookId));
+            stmt.setInt(2, request.transactionId);
 
             if (stmt.executeUpdate() <= 0) { // failed
                 throw new TransactionIdNotFoundException("Transaction not found");
@@ -377,7 +375,7 @@ public class DbHelper {
                     throw new TransactionIdNotFoundException("Transaction not found"); // This shouldn't happen
                 }
                 if (request.operation == TransactionRequestHandler.TransactionOperation.COMMIT) {
-                    if(rs.getTimestamp("timestamp").before(Date.from(Instant.now()))) {
+                    if(rs.getTimestamp("last_modified").before(Date.from(Instant.now().minusSeconds(120)))) { // 2 minutes timeout
                         throw new TransactionExpiredException("Transaction expired");
                     }
                     ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
