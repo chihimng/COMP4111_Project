@@ -79,7 +79,7 @@ public class DbHelper {
             if (stmt.executeUpdate() > 0) { // success
                 return token;
             } else { // this should not happen
-                throw new SignInException("this should now happen: updated 0 rows without exception");
+                throw new SignInException("this should not happen: updated 0 rows without exception");
             }
         } catch (SQLException e) {
             if (e.getMessage().contains("Column 'username' cannot be null")) {
@@ -145,7 +145,7 @@ public class DbHelper {
                     throw new CreateBookException("failed to get last inserted id");
                 }
             } else { // failed
-                throw new CreateBookException("this should now happen: updated 0 rows without exception");
+                throw new CreateBookException("this should not happen: updated 0 rows without exception");
             }
         } catch (SQLException e) {
             if (e.getMessage().contains("Duplicate entry")) {
@@ -356,7 +356,7 @@ public class DbHelper {
                     throw new TransactionException("failed to get last inserted id");
                 }
             } else { // failed
-                throw new TransactionException("this should now happen: updated 0 rows without exception");
+                throw new TransactionException("this should not happen: updated 0 rows without exception");
             }
         } catch (SQLException e) {
             throw new TransactionException(e.getMessage());
