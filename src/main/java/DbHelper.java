@@ -417,7 +417,7 @@ public class DbHelper {
     }
 
     public void removeExpiredTransactions() throws Exception {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM transaction WHERE last_modified < DATE_ADD(NOW(), INTERVAL 2 MINUTE)")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM transaction WHERE last_modified < DATE_SUB(NOW(), INTERVAL 2 MINUTE)")) {
             stmt.executeUpdate();
         } catch (MySQLSyntaxErrorException e) {
             throw new TransactionRejectedException(e.getMessage());
