@@ -343,6 +343,7 @@ public class DbHelper {
     }
 
     public int requestTransactionId(String token) throws Exception {
+        this.removeExpiredTransactions();
         // Try with resources to leverage AutoClosable implementation
         try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (last_modified , statement, token) VALUES (NOW(), ?, ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
             stmt.setString(1, "");
@@ -408,6 +409,16 @@ public class DbHelper {
             } else {
                 throw new TransactionIdNotFoundException("Transaction not found");
             }
+        } catch (MySQLSyntaxErrorException e) {
+            throw new TransactionRejectedException(e.getMessage());
+        } catch (SQLException e) {
+            throw new TransactionException(e.getMessage());
+        }
+    }
+
+    public void removeExpiredTransactions() throws Exception {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM transaction WHERE last_modified < DATE_ADD(NOW(), INTERVAL 2 MINUTE)")) {
+            stmt.executeUpdate();
         } catch (MySQLSyntaxErrorException e) {
             throw new TransactionRejectedException(e.getMessage());
         } catch (SQLException e) {
