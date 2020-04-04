@@ -112,7 +112,6 @@ public class TransactionRequestHandler implements HttpRequestHandler {
             }
         } catch (ClassCastException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            return;
         }
     }
 
@@ -127,14 +126,11 @@ public class TransactionRequestHandler implements HttpRequestHandler {
                 ContentType.APPLICATION_JSON
             );
             response.setEntity(body);
-            return;
         } catch (DbHelper.CreateTransactionException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            return;
         } catch (Exception e) {
             e.printStackTrace();
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-            return;
         }
     }
 
@@ -164,31 +160,24 @@ public class TransactionRequestHandler implements HttpRequestHandler {
                 } catch (Exception e) {
                     System.out.println("Transaction delete failed after successful commit");
                 }
-                return;
             } catch (DbHelper.ExecuteTransactionException e) {
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-                return;
             } catch (Exception e) {
                 e.printStackTrace();
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-                return;
             }
         } else if (requestBody.operation == TransactionOperation.CANCEL) {
             try {
                 DbHelper.getInstance().deleteTransaction(requestBody.transactionId, token);
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-                return;
             } catch (DbHelper.DeleteTransactionNotFoundException e) {
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-                return;
             } catch (Exception e) {
                 e.printStackTrace();
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-                return;
             }
         } else {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            return;
         }
     }
 
@@ -211,14 +200,11 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         try {
             DbHelper.getInstance().appendTransaction(requestBody.transactionId, token, requestBody.action, requestBody.bookId);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-            return;
         } catch (DbHelper.AppendTransactionNotFoundException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            return;
         } catch (Exception e) {
             e.printStackTrace();
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-            return;
         }
     }
 }

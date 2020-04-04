@@ -107,7 +107,7 @@ public class DbHelper {
     }
 
     public boolean signOut(String token) throws SignOutException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM session WHERE token = ?;")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM session WHERE token = ?")) {
             stmt.setString(1, token);
             if (stmt.executeUpdate() > 0) { // success
                 return true;
@@ -126,7 +126,7 @@ public class DbHelper {
     }
 
     public boolean validateToken(String token) throws ValidateTokenException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM session WHERE token = ?;")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM session WHERE token = ?")) {
             stmt.setString(1, token);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
@@ -152,7 +152,7 @@ public class DbHelper {
     }
 
     public int createBook(Book book) throws CreateBookException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO book (title, author, publisher, year) VALUES (?, ?, ?, ?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO book (title, author, publisher, year) VALUES (?, ?, ?, ?)"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
             stmt.setString(1, book.title);
             stmt.setString(2, book.author);
             stmt.setString(3, book.publisher);
@@ -189,7 +189,7 @@ public class DbHelper {
 
 
     public int findDuplicateBook(Book book) throws FindDuplicateBookException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM book WHERE title = ?");) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM book WHERE title = ?")) {
             stmt.setString(1, book.title);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
@@ -327,7 +327,7 @@ public class DbHelper {
 
     public void deleteBook(int id) throws DeleteBookException {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM book WHERE id = ?;")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM book WHERE id = ?")) {
             stmt.setInt(1, id);
             if (stmt.executeUpdate() <= 0) { // failed
                 throw new DeleteBookNotFoundException("No book record");
@@ -345,7 +345,7 @@ public class DbHelper {
 
     public int createTransaction(String token) throws CreateTransactionException {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (token) VALUES (?);"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID();")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (token) VALUES (?)"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
             stmt.setString(1, token);
             if (stmt.executeUpdate() > 0) { // success
                 ResultSet rs = getIdStmt.executeQuery();
@@ -421,19 +421,19 @@ public class DbHelper {
     }
 
     public void executeTransaction(int transactionId, String token) throws ExecuteTransactionException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ? AND token = ?;")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ? AND token = ?")) {
             stmt.setInt(1, transactionId);
             stmt.setString(2, token);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
-                if(rs.getTimestamp("last_modified").before(Date.from(Instant.now().minusSeconds(120)))) { // 2 minutes timeout
+                if (rs.getTimestamp("last_modified").before(Date.from(Instant.now().minusSeconds(120)))) { // 2 minutes timeout
                     System.out.println("Expired");
                     throw new ExecuteTransactionExpiredException("Transaction expired");
                 }
                 ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
                 Statement commitStmt = conn.createStatement();
                 conn.setAutoCommit(false);
-                for(String s : statement) {
+                for (String s : statement) {
                     commitStmt.addBatch(s);
                 }
                 commitStmt.executeBatch();
