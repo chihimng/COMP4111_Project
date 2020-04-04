@@ -162,31 +162,26 @@ public class BooksRequestHandler implements HttpRequestHandler {
         int id = Integer.parseInt(idStr);
 
         try {
-            List<Book> foundBooks = DbHelper.getInstance().searchBook(idStr, null, null, null, null, null);
-            if (foundBooks.isEmpty()) {
-                // book not found
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
-                return;
-            }
-            if (foundBooks.get(0).isAvailable == requestBody.isAvailable) {
-                // book have same state as requested (double borrow/loan)
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-                return;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            // FIXME: update to align with api spec
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-        }
-
-        try {
             DbHelper.getInstance().modifyBookAvailability(id, requestBody.isAvailable);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
         } catch (NumberFormatException e) {
             System.out.println("Unable to parse number");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-        } catch (DbHelper.ModifyBookNotFoundException e) {
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
+        } catch (DbHelper.ModifyBookNotFoundException e) { // either id not found or already borrowed
+            try {
+                List<Book> foundBooks = DbHelper.getInstance().searchBook(idStr, null, null, null, null, null);
+                if (foundBooks.isEmpty()) {
+                    // book not found
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
+                } else {
+                    // book have same state as requested (double borrow/loan)
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                }
+            } catch (Exception e1) {
+                e1.printStackTrace();
+                // FIXME: update to align with api spec
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             // FIXME: update to align with api spec

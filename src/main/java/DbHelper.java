@@ -277,7 +277,8 @@ public class DbHelper {
                         rs.getString("title"),
                         rs.getString("author"),
                         rs.getString("publisher"),
-                        rs.getInt("year")
+                        rs.getInt("year"),
+                        rs.getBoolean("isAvailable")
                 ));
             }
             return books;
@@ -300,9 +301,10 @@ public class DbHelper {
 
     public void modifyBookAvailability(int id, boolean isAvailable) throws ModifyBookException {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ?;")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?")) {
             stmt.setBoolean(1, isAvailable);
             stmt.setInt(2, id);
+            stmt.setBoolean(3, isAvailable);
             if (stmt.executeUpdate() <= 0) { // failed
                 throw new ModifyBookNotFoundException("No book record");
             }
@@ -355,7 +357,7 @@ public class DbHelper {
             } else { // failed
                 throw new CreateTransactionException("this should not happen: updated 0 rows without exception");
             }
-        } catch (Exception e) {
+        } catch (SQLException e) {
             e.printStackTrace();
             throw new CreateTransactionException(e.getMessage());
         }
@@ -374,10 +376,11 @@ public class DbHelper {
     }
 
     public void appendTransaction(int transactionId, String token, TransactionRequestHandler.TransactionPutAction action, int bookId) throws AppendTransactionException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ?;")) {
-            PreparedStatement saveStmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ?;");
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ?")) {
+            PreparedStatement saveStmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
             saveStmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             saveStmt.setInt(2, bookId);
+            saveStmt.setBoolean(3, action == TransactionRequestHandler.TransactionPutAction.RETURN);
 
             String saveStmtSql = ((JDBC4PreparedStatement)saveStmt).asSql() + ";";
             System.out.println(saveStmtSql);
@@ -387,7 +390,7 @@ public class DbHelper {
             if (stmt.executeUpdate() <= 0) { // failed
                 throw new AppendTransactionNotFoundException("Transaction not found");
             }
-        } catch (Exception e) {
+        } catch (SQLException e) {
             e.printStackTrace();
             throw new AppendTransactionException(e.getMessage());
         }
@@ -440,8 +443,9 @@ public class DbHelper {
                 throw new ExecuteTransactionNotFoundException("Transaction not found");
             }
         } catch (MySQLSyntaxErrorException e) {
+            e.printStackTrace();
             throw new ExecuteTransactionRejectedException(e.getMessage());
-        } catch (Exception e) {
+        } catch (SQLException e) {
             e.printStackTrace();
             throw new ExecuteTransactionException(e.getMessage());
         }
@@ -460,13 +464,13 @@ public class DbHelper {
     }
 
     public void deleteTransaction(int transactionId, String token) throws DeleteTransactionException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM transaction WHERE id = ? AND token = ?;")) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("DELETE FROM transaction WHERE id = ? AND token = ?")) {
             stmt.setInt(1, transactionId);
             stmt.setString(2, token);
             if (stmt.executeUpdate() <= 0) { // failed
                 throw new DeleteTransactionNotFoundException("Transaction not found");
             }
-        } catch (Exception e) {
+        } catch (SQLException e) {
             e.printStackTrace();
             throw new DeleteTransactionException(e.getMessage());
         }
