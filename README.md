@@ -1,15 +1,22 @@
-# COMP4111 Project
+# COMP4111 Project: RESTful Web API in Java
 
 Ng Chi Him 20420921 chngax@connect.ust.hk
+
 Wong Hiu Nam (sid) hnwongab@connect.ust.hk
 
 Project Spec: [Link](https://course.cse.ust.hk/comp4111/project.html)
 
+Test Cases: [Link](https://course.cse.ust.hk/comp4111/test_cases.html)
+
 ## Running the stack locally with docker
+
+> Prerequisite: Docker and Docker Compose already installed
 
 This script spins up a docker compose stack containing a mysql and a java runner instance.
 
-Ports 8080 and 3306 are mapped from the host to respective containers for easier debug.
+Remember to initialize database schema (`schema.sql`) with a database client (e.g. DataGrip) before testing.
+
+Ports 8080 and 3306 are mapped to the host for easy debug / testing.
 
 ```sh
 ./run_stack.sh
@@ -23,7 +30,11 @@ docker-compose rm -avs
 
 ## Running the stack on bare metal
 
+> Prerequisite: Install Java 11 and MySQL 5.7, with database already configured
+
 Set the following in environment variables when running the api server:
+
+(update values as needed)
 
 ```sh
 PORT=80
