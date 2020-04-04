@@ -129,11 +129,7 @@ public class DbHelper {
         try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM session WHERE token = ?")) {
             stmt.setString(1, token);
             ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                return true;
-            } else { // failed
-                return false;
-            }
+            return rs.next();
         } catch (SQLException e) {
             throw new ValidateTokenException(e.getMessage());
         }
