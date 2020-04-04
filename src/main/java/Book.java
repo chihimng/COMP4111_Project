@@ -14,13 +14,17 @@ public class Book {
     @JsonProperty("Year")
     public Integer year;
 
+    @JsonProperty("Available")
+    public boolean isAvailable;
+
     Book() {}
 
-    Book(String title, String author, String publisher, int year) {
+    Book(String title, String author, String publisher, int year, boolean isAvailable) {
         this.title = title;
         this.author = author;
         this.publisher = publisher;
         this.year = year;
+        this.isAvailable = isAvailable;
     }
 
     @JsonIgnore

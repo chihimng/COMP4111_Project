@@ -9,6 +9,7 @@ import org.apache.http.protocol.HttpRequestHandler;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -155,12 +156,30 @@ public class BooksRequestHandler implements HttpRequestHandler {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
         }
+        URI uri = URI.create(request.getRequestLine().getUri());
+        String path = uri.getPath();
+        String idStr = path.substring(path.lastIndexOf('/') + 1);
+        int id = Integer.parseInt(idStr);
 
         try {
-            URI uri = URI.create(request.getRequestLine().getUri());
-            String path = uri.getPath();
-            String idStr = path.substring(path.lastIndexOf('/') + 1);
-            int id = Integer.parseInt(idStr);
+            List<Book> foundBooks = DbHelper.getInstance().searchBook(idStr, null, null, null, null, null);
+            if (foundBooks.isEmpty()) {
+                // book not found
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
+                return;
+            }
+            if (foundBooks.get(0).isAvailable == requestBody.isAvailable) {
+                // book have same state as requested (double borrow/loan)
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                return;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            // FIXME: update to align with api spec
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        }
+
+        try {
             DbHelper.getInstance().modifyBookAvailability(id, requestBody.isAvailable);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
         } catch (NumberFormatException e) {
