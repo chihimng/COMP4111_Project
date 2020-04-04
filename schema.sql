@@ -1,5 +1,3 @@
-create schema comp4111 collate latin1_swedish_ci;
-
 create table book
 (
 	id smallint unsigned auto_increment
@@ -10,7 +8,7 @@ create table book
 	year smallint unsigned not null,
 	isAvailable boolean default true not null,
 	constraint book_pk_2
-		unique (title, author, publisher, year)
+		unique (title)
 );
 
 create table user
@@ -36,12 +34,10 @@ create table transaction
 (
 	id MEDIUMINT unsigned auto_increment,
 	last_modified timestamp default CURRENT_TIMESTAMP not null,
-	statement varchar(1000) not null,
+	statement varchar(1000) default "" not null,
 	token char(36) not null,
 	constraint transaction_pk
-		primary key (id),
-    constraint transaction_uindex
-		unique (token)
+		primary key (id)
 );
 
 DELIMITER $$
@@ -52,7 +48,7 @@ BEGIN
     REPEAT
         SET @suffix = LPAD(CAST(counter AS CHAR(3)), 3, '0');
         SET @username = CONCAT("user", @suffix);
-        SET @password = CONCAT("passwd", @suffix);
+        SET @password = CONCAT("pass", @suffix);
         SET @salt = UUID();
         INSERT INTO user VALUES (@username, UNHEX(SHA2(CONCAT(@password, @salt), 256)), @salt);
         SET counter = counter + 1;

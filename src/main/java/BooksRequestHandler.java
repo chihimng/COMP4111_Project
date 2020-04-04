@@ -9,6 +9,7 @@ import org.apache.http.protocol.HttpRequestHandler;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,19 @@ public class BooksRequestHandler implements HttpRequestHandler {
     }
     @Override
     public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        // TODO: validate token
+        try {
+            String token = ParsingHelper.getTokenFromRequest(request);
+            if (token == null || !DbHelper.getInstance().validateToken(token)) {
+                // Invalid token
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                return;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            return;
+        }
+
         switch (request.getRequestLine().getMethod()) {
             case "POST":
                 handleCreate(request, response, context);
@@ -65,7 +78,6 @@ public class BooksRequestHandler implements HttpRequestHandler {
             int id = DbHelper.getInstance().createBook(requestBody);
             response.setHeader(HttpHeaders.LOCATION, "/books/" + id);
         } catch (DbHelper.CreateBookConflictException e) {
-            // TODO: get book id and return location
             int id = -1;
             try {
                 id = DbHelper.getInstance().findDuplicateBook(requestBody);
@@ -144,19 +156,32 @@ public class BooksRequestHandler implements HttpRequestHandler {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
         }
+        URI uri = URI.create(request.getRequestLine().getUri());
+        String path = uri.getPath();
+        String idStr = path.substring(path.lastIndexOf('/') + 1);
+        int id = Integer.parseInt(idStr);
 
         try {
-            URI uri = URI.create(request.getRequestLine().getUri());
-            String path = uri.getPath();
-            String idStr = path.substring(path.lastIndexOf('/') + 1);
-            int id = Integer.parseInt(idStr);
             DbHelper.getInstance().modifyBookAvailability(id, requestBody.isAvailable);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
         } catch (NumberFormatException e) {
             System.out.println("Unable to parse number");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-        } catch (DbHelper.ModifyBookNotFoundException e) {
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
+        } catch (DbHelper.ModifyBookNotFoundException e) { // either id not found or already borrowed
+            try {
+                List<Book> foundBooks = DbHelper.getInstance().searchBook(idStr, null, null, null, null, null);
+                if (foundBooks.isEmpty()) {
+                    // book not found
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_FOUND, "No book record");
+                } else {
+                    // book have same state as requested (double borrow/loan)
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                }
+            } catch (Exception e1) {
+                e1.printStackTrace();
+                // FIXME: update to align with api spec
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            }
         } catch (Exception e) {
             e.printStackTrace();
             // FIXME: update to align with api spec
