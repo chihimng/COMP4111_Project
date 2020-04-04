@@ -169,11 +169,8 @@ public class DbHelper {
 
 
     public int findDuplicateBook(Book book) throws FindDuplicateBookException {
-        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM book WHERE title = ? AND author = ? AND publisher = ? AND year = ?");) {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM book WHERE title = ?");) {
             stmt.setString(1, book.title);
-            stmt.setString(2, book.author);
-            stmt.setString(3, book.publisher);
-            stmt.setInt(4, book.year);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 return rs.getInt("id");

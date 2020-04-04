@@ -10,7 +10,7 @@ create table book
 	year smallint unsigned not null,
 	isAvailable boolean default true not null,
 	constraint book_pk_2
-		unique (title, author, publisher, year)
+		unique (title)
 );
 
 create table user
