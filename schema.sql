@@ -1,5 +1,3 @@
-create schema comp4111 collate latin1_swedish_ci;
-
 create table book
 (
 	id smallint unsigned auto_increment
