@@ -32,6 +32,17 @@ create table session
 		foreign key (username) references user (username)
 );
 
+create table transaction
+(
+	id MEDIUMINT unsigned auto_increment,
+	last_modified timestamp default CURRENT_TIMESTAMP not null,
+	statement varchar(1000) not null,
+	token char(36) not null,
+	constraint transaction_pk
+		primary key (id),
+    constraint transaction_uindex
+		unique (token)
+);
 
 DELIMITER $$
 CREATE PROCEDURE CreateUser()
