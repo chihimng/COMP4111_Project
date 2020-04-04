@@ -65,7 +65,6 @@ public class BooksRequestHandler implements HttpRequestHandler {
             int id = DbHelper.getInstance().createBook(requestBody);
             response.setHeader(HttpHeaders.LOCATION, "/books/" + id);
         } catch (DbHelper.CreateBookConflictException e) {
-            // TODO: get book id and return location
             int id = -1;
             try {
                 id = DbHelper.getInstance().findDuplicateBook(requestBody);

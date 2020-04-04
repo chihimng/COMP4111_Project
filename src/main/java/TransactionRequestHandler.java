@@ -16,10 +16,10 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         // TODO: validate token
         switch (request.getRequestLine().getMethod()) {
             case "POST":
-                handleTransactionManagement(request, response, context);
+                handleManage(request, response, context);
                 break;
             case "PUT":
-                handleTransactionAction(request, response, context);
+                handleAppend(request, response, context);
                 break;
             default:
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
@@ -89,42 +89,99 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         }
     }
 
-    public void handleTransactionManagement(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleManage(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
         try {
             HttpEntityEnclosingRequest entityEnclosingRequest = ParsingHelper.castHttpEntityRequest(request);
             // If POST body has no content, request new transaction ID
             if(entityEnclosingRequest.getEntity().getContent().available() == 0) {
-                handleRequestTransaction(request, response, context);
+                handleCreate(request, response, context);
             } else {
-                handleTransactionOperation(request, response, context);
+                handleOperation(request, response, context);
             }
         } catch (ClassCastException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
         }
     }
 
-    public void handleRequestTransaction(HttpRequest request, HttpResponse response, HttpContext context) {
+    public void handleCreate(HttpRequest request, HttpResponse response, HttpContext context) {
         try {
             String token = ParsingHelper.getTokenFromRequest(request);
-            TransactionIdResponseBody responseBody = new TransactionIdResponseBody(DbHelper.getInstance().requestTransactionId(token));
+            TransactionIdResponseBody responseBody = new TransactionIdResponseBody(DbHelper.getInstance().createTransaction(token));
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
             ObjectMapper mapper = new ObjectMapper();
             StringEntity body = new StringEntity(
-                    mapper.writeValueAsString(responseBody),
-                    ContentType.APPLICATION_JSON
+                mapper.writeValueAsString(responseBody),
+                ContentType.APPLICATION_JSON
             );
             response.setEntity(body);
-        } catch (DbHelper.TransactionException e) {
-            e.printStackTrace();
+            return;
+        } catch (DbHelper.CreateTransactionException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
         } catch (Exception e) {
             e.printStackTrace();
-            // FIXME: update to align with api spec
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            return;
         }
     }
 
-    public void handleTransactionAction(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleOperation(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+        String token = ParsingHelper.getTokenFromRequest(request);
+
+        TransactionPostRequestBody requestBody;
+        try {
+            requestBody = ParsingHelper.parseRequestBody(request, TransactionPostRequestBody.class);
+        } catch (Exception e) {
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
+        }
+
+        if (requestBody == null) {
+            System.out.println("Request body is null");
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
+        }
+
+        if (requestBody.operation == TransactionOperation.COMMIT) {
+            try {
+                DbHelper.getInstance().executeTransaction(requestBody.transactionId, token);
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+                return;
+            } catch (DbHelper.ExecuteTransactionExpiredException e) {
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                return;
+            } catch (DbHelper.ExecuteTransactionNotFoundException e) {
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                return;
+            } catch (DbHelper.ExecuteTransactionRejectedException e) {
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                return;
+            } catch (Exception e) {
+                e.printStackTrace();
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+                return;
+            }
+        } else if (requestBody.operation == TransactionOperation.CANCEL) {
+            try {
+                DbHelper.getInstance().deleteTransaction(requestBody.transactionId, token);
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+                return;
+            } catch (DbHelper.DeleteTransactionNotFoundException e) {
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                return;
+            } catch (Exception e) {
+                e.printStackTrace();
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+                return;
+            }
+        } else {
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            return;
+        }
+    }
+
+    public void handleAppend(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
         TransactionPutRequestBody requestBody;
         String token = ParsingHelper.getTokenFromRequest(request);
         try {
@@ -141,43 +198,16 @@ public class TransactionRequestHandler implements HttpRequestHandler {
         }
 
         try {
-            DbHelper.getInstance().performTransactionAction(token, requestBody);
-        } catch (DbHelper.TransactionException | DbHelper.ModifyBookNotFoundException e) {
-            e.printStackTrace();
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-        } catch (Exception e) {
-            e.printStackTrace();
-            // FIXME: update to align with api spec
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-        }
-    }
-
-    public void handleTransactionOperation(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        TransactionPostRequestBody requestBody;
-        String token = ParsingHelper.getTokenFromRequest(request);
-
-        try {
-            requestBody = ParsingHelper.parseRequestBody(request, TransactionPostRequestBody.class);
-        } catch (Exception e) {
+            DbHelper.getInstance().appendTransaction(requestBody.transactionId, token, requestBody.action, requestBody.bookId);
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+            return;
+        } catch (DbHelper.AppendTransactionNotFoundException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
-        }
-
-        if (requestBody == null) {
-            System.out.println("Request body is null");
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            return;
-        }
-
-        try {
-            DbHelper.getInstance().performTransactionOperation(token, requestBody);
-        } catch (DbHelper.TransactionException e) {
-            e.printStackTrace();
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
         } catch (Exception e) {
             e.printStackTrace();
-            // FIXME: update to align with api spec
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            return;
         }
     }
 }
