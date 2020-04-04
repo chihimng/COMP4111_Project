@@ -52,7 +52,7 @@ BEGIN
     REPEAT
         SET @suffix = LPAD(CAST(counter AS CHAR(3)), 3, '0');
         SET @username = CONCAT("user", @suffix);
-        SET @password = CONCAT("passwd", @suffix);
+        SET @password = CONCAT("pass", @suffix);
         SET @salt = UUID();
         INSERT INTO user VALUES (@username, UNHEX(SHA2(CONCAT(@password, @salt), 256)), @salt);
         SET counter = counter + 1;
