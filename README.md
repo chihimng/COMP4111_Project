@@ -1,6 +1,11 @@
 # COMP4111 Project
 
-## Running the stack locally with docker:
+Ng Chi Him 20420921 chngax@connect.ust.hk
+Wong Hiu Nam (sid) hnwongab@connect.ust.hk
+
+Project Spec: [Link](https://course.cse.ust.hk/comp4111/project.html)
+
+## Running the stack locally with docker
 
 This script spins up a docker compose stack containing a mysql and a java runner instance.
 
@@ -14,6 +19,15 @@ To cleanup (remove all docker data storage and networks):
 
 ```sh
 docker-compose rm -avs
+```
+
+## Running the stack on bare metal
+
+Set the following in environment variables when running the api server:
+
+```sh
+PORT=80
+DB_URL="mysql://db:3306/comp4111?user=comp4111&password=comp4111&useSSL=false"
 ```
 
 ## Database schema
