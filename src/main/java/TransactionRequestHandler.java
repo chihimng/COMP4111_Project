@@ -159,14 +159,13 @@ public class TransactionRequestHandler implements HttpRequestHandler {
             try {
                 DbHelper.getInstance().executeTransaction(requestBody.transactionId, token);
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
+                try {
+                    DbHelper.getInstance().deleteTransaction(requestBody.transactionId, token);
+                } catch (Exception e) {
+                    System.out.println("Transaction delete failed after successful commit");
+                }
                 return;
-            } catch (DbHelper.ExecuteTransactionExpiredException e) {
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-                return;
-            } catch (DbHelper.ExecuteTransactionNotFoundException e) {
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-                return;
-            } catch (DbHelper.ExecuteTransactionRejectedException e) {
+            } catch (DbHelper.ExecuteTransactionException e) {
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
                 return;
             } catch (Exception e) {
