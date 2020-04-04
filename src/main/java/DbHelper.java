@@ -119,6 +119,26 @@ public class DbHelper {
         }
     }
 
+    public static class ValidateTokenException extends Exception {
+        ValidateTokenException(String s) {
+            super(s);
+        }
+    }
+
+    public boolean validateToken(String token) throws ValidateTokenException {
+        try (Connection conn = DriverManager.getConnection(dbUrl); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM session WHERE token = ?;")) {
+            stmt.setString(1, token);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) {
+                return true;
+            } else { // failed
+                return false;
+            }
+        } catch (SQLException e) {
+            throw new ValidateTokenException(e.getMessage());
+        }
+    }
+
     public static class CreateBookException extends Exception {
         CreateBookException(String s) {
             super(s);

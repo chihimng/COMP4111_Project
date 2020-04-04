@@ -13,7 +13,19 @@ import java.net.URLDecoder;
 public class TransactionRequestHandler implements HttpRequestHandler {
     @Override
     public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        // TODO: validate token
+        try {
+            String token = ParsingHelper.getTokenFromRequest(request);
+            if (token == null || !DbHelper.getInstance().validateToken(token)) {
+                // Invalid token
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                return;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            return;
+        }
+
         switch (request.getRequestLine().getMethod()) {
             case "POST":
                 handleManage(request, response, context);
