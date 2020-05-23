@@ -1,10 +1,10 @@
-import com.mysql.jdbc.JDBC4PreparedStatement;
-import com.mysql.jdbc.exceptions.jdbc4.MySQLSyntaxErrorException;
-import com.mysql.jdbc.jdbc2.optional.MysqlDataSource;
+import com.mysql.jdbc.jdbc2.optional.*;
 
+import javax.transaction.xa.XAException;
+import javax.transaction.xa.XAResource;
+import javax.transaction.xa.Xid;
+import java.math.BigInteger;
 import java.sql.*;
-import java.time.Instant;
-import java.util.Date;
 import java.util.*;
 
 // Notice, do not import com.mysql.jdbc.*
@@ -21,7 +21,8 @@ public class DbHelper {
         return _singleton;
     }
 
-    private MysqlDataSource ds;
+    private MysqlXADataSource dataSource;
+    private JDBC4MysqlXAConnection xaConnection;
 
     private static int TRANSACTION_TIMEOUT_SECONDS = 120;
 
@@ -36,9 +37,11 @@ public class DbHelper {
             // Properties & Constructor
             String dbUrl = "jdbc:mysql://localhost:3306/comp4111?user=comp4111&password=comp4111&useSSL=false";
             if (env != null) dbUrl = "jdbc:" + env;
-            this.ds = new MysqlDataSource();
-            this.ds.setUrl(dbUrl);
+            this.dataSource = new MysqlXADataSource();
+            this.dataSource.setUrl(dbUrl);
+            this.xaConnection = (JDBC4MysqlXAConnection) this.dataSource.getXAConnection();
         } catch (Exception e) {
+            e.printStackTrace();
             System.out.println("Failed to load db host from env, reverting to default");
         }
 
@@ -48,7 +51,7 @@ public class DbHelper {
     }
 
     public String test() throws Exception {
-        Connection conn = this.ds.getConnection();
+        Connection conn = this.dataSource.getConnection();
         Statement stmt = conn.createStatement();
         ResultSet rs = stmt.executeQuery("SHOW VARIABLES LIKE 'version%';");
         String result = "";
@@ -57,6 +60,10 @@ public class DbHelper {
         }
         conn.close();
         return result;
+    }
+
+    public Xid getXidByTransactionID(int transactionID) {
+        return new MysqlXid(BigInteger.valueOf(transactionID).toByteArray(), new byte[]{0x01}, 0);
     }
 
     public static class SignInException extends Exception {
@@ -79,7 +86,7 @@ public class DbHelper {
 
     public String signIn(String username, String password) throws SignInException {
         String token = UUID.randomUUID().toString();
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("INSERT INTO session (username, token) VALUES ((SELECT username FROM user WHERE username = ? AND password = UNHEX(SHA2(CONCAT(?, salt), 256))), ?)")) {
+        try (Connection conn = this.dataSource.getConnection(); PreparedStatement stmt = conn.prepareStatement("INSERT INTO session (username, token) VALUES ((SELECT username FROM user WHERE username = ? AND password = UNHEX(SHA2(CONCAT(?, salt), 256))), ?)")) {
             stmt.setString(1, username);
             stmt.setString(2, password);
             stmt.setString(3, token);
@@ -115,7 +122,7 @@ public class DbHelper {
     }
 
     public boolean signOut(String token) throws SignOutException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("DELETE FROM session WHERE token = ?")) {
+        try (Connection conn = this.dataSource.getConnection(); PreparedStatement stmt = conn.prepareStatement("DELETE FROM session WHERE token = ?")) {
             stmt.setString(1, token);
             if (stmt.executeUpdate() > 0) { // success
                 return true;
@@ -134,7 +141,7 @@ public class DbHelper {
     }
 
     public boolean validateToken(String token) throws ValidateTokenException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM session WHERE token = ?")) {
+        try (Connection conn = this.dataSource.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM session WHERE token = ?")) {
             stmt.setString(1, token);
             ResultSet rs = stmt.executeQuery();
             return rs.next();
@@ -156,7 +163,7 @@ public class DbHelper {
     }
 
     public int createBook(Book book) throws CreateBookException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("INSERT INTO book (title, author, publisher, year) VALUES (?, ?, ?, ?)"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
+        try (Connection conn = this.dataSource.getConnection(); PreparedStatement stmt = conn.prepareStatement("INSERT INTO book (title, author, publisher, year) VALUES (?, ?, ?, ?)"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
             stmt.setString(1, book.title);
             stmt.setString(2, book.author);
             stmt.setString(3, book.publisher);
@@ -193,7 +200,7 @@ public class DbHelper {
 
 
     public int findDuplicateBook(Book book) throws FindDuplicateBookException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM book WHERE title = ?")) {
+        try (Connection conn = this.dataSource.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM book WHERE title = ?")) {
             stmt.setString(1, book.title);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
@@ -269,7 +276,7 @@ public class DbHelper {
         query += ";";
         System.out.println(clauses.toString());
         System.out.println(query);
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement(query)) {
+        try (Connection conn = this.dataSource.getConnection(); PreparedStatement stmt = conn.prepareStatement(query)) {
             int i = 1;
             if (query.contains("id = ?")) {
                 stmt.setInt(i, Integer.parseUnsignedInt(id));
@@ -314,7 +321,7 @@ public class DbHelper {
 
     public void modifyBookAvailability(int id, boolean isAvailable) throws ModifyBookException {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?")) {
+        try (Connection conn = this.dataSource.getConnection(); PreparedStatement stmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?")) {
             stmt.setBoolean(1, isAvailable);
             stmt.setInt(2, id);
             stmt.setBoolean(3, isAvailable);
@@ -340,7 +347,7 @@ public class DbHelper {
 
     public void deleteBook(int id) throws DeleteBookException {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("DELETE FROM book WHERE id = ?")) {
+        try (Connection conn = this.dataSource.getConnection(); PreparedStatement stmt = conn.prepareStatement("DELETE FROM book WHERE id = ?")) {
             stmt.setInt(1, id);
             if (stmt.executeUpdate() <= 0) { // failed
                 throw new DeleteBookNotFoundException("No book record");
@@ -357,19 +364,32 @@ public class DbHelper {
     }
 
     public int createTransaction(String token) throws CreateTransactionException {
-        // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (token) VALUES (?)"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
-            stmt.setString(1, token);
-            if (stmt.executeUpdate() > 0) { // success
-                ResultSet rs = getIdStmt.executeQuery();
-                if (rs.next()) {
-                    return rs.getInt(1);
-                } else {
-                    throw new CreateTransactionException("failed to get last inserted id");
+        int id = 0;
+        try (Connection conn = this.dataSource.getConnection();
+             PreparedStatement queryStmt = conn.prepareStatement("SELECT * FROM transaction WHERE token = ? AND last_modified > CURRENT_TIMESTAMP() - 120");
+             PreparedStatement replaceStmt = conn.prepareStatement("REPLACE INTO transaction SET token = ?");
+             PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
+            // Get XA Resource
+            XAResource res = this.xaConnection.getXAResource();
+
+            queryStmt.setString(1, token);
+            ResultSet rs = queryStmt.executeQuery();
+            if (rs.next()) { // id found
+                id = rs.getInt("id");
+            } else {
+                replaceStmt.setString(1, token);
+                if (replaceStmt.executeUpdate() > 0) { //
+                    ResultSet idRs = getIdStmt.executeQuery();
+                    if (idRs.next()) {
+                        id = idRs.getInt(1);
+                        res.setTransactionTimeout(TRANSACTION_TIMEOUT_SECONDS);
+                        res.start(getXidByTransactionID(id), XAResource.TMNOFLAGS);
+                        res.end(getXidByTransactionID(id), XAResource.TMSUCCESS);
+                    }
                 }
             }
             return id;
-        } catch (SQLException e) {
+        } catch (Exception e) {
             e.printStackTrace();
             throw new CreateTransactionException(e.getMessage());
         }
@@ -388,20 +408,17 @@ public class DbHelper {
     }
 
     public void appendTransaction(int transactionId, String token, TransactionRequestHandler.TransactionPutAction action, int bookId) throws AppendTransactionException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ?")) {
-            PreparedStatement saveStmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
-            saveStmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
-            saveStmt.setInt(2, bookId);
-            saveStmt.setBoolean(3, action == TransactionRequestHandler.TransactionPutAction.RETURN);
-
-            String saveStmtSql = ((JDBC4PreparedStatement) saveStmt).asSql() + ";";
-            System.out.println(saveStmtSql);
-            stmt.setString(1, saveStmtSql);
-            stmt.setInt(2, transactionId);
-            stmt.setString(3, token);
-            if (stmt.executeUpdate() <= 0) { // failed
-                throw new AppendTransactionNotFoundException("Transaction not found");
-            }
+        try {
+            XAResource res = this.xaConnection.getXAResource();
+            res.start(getXidByTransactionID(transactionId), XAResource.TMRESUME);
+            PreparedStatement stmt = this.xaConnection.getConnection().prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
+            stmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
+            stmt.setInt(2, bookId);
+            stmt.setBoolean(3, action == TransactionRequestHandler.TransactionPutAction.RETURN);
+            stmt.executeUpdate();
+            res.end(getXidByTransactionID(transactionId), XAResource.TMSUCCESS);
+        } catch (XAException e) {
+            throw new AppendTransactionNotFoundException((e.getMessage()));
         } catch (SQLException e) {
             e.printStackTrace();
             throw new AppendTransactionException(e.getMessage());
@@ -426,61 +443,25 @@ public class DbHelper {
         }
     }
 
-    public void executeTransaction(int transactionId, String token) throws ExecuteTransactionException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ? AND token = ?")) {
-            stmt.setInt(1, transactionId);
-            stmt.setString(2, token);
-            ResultSet rs = stmt.executeQuery();
-            if (rs.next()) {
-                ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
-                Statement commitStmt = conn.createStatement();
-                conn.setAutoCommit(false);
-                for (String s : statement) {
-                    commitStmt.addBatch(s);
-                }
-                boolean error = Arrays.stream(commitStmt.executeBatch()).anyMatch(i -> i == 0);
-                if(error) {
-                    conn.rollback();
-                    conn.setAutoCommit(true);
-                    throw new ExecuteTransactionRejectedException("Transaction failure, transaction rollback");
-                } else {
-                    conn.commit();
-                    conn.setAutoCommit(true);
-                }
+    public void executeTransaction(int transactionId, String token, boolean commit) throws ExecuteTransactionException {
+        try {
+            XAResource res = this.xaConnection.getXAResource();
+            if(commit) {
+                res.commit(getXidByTransactionID(transactionId), true);
             } else {
-                throw new ExecuteTransactionNotFoundException("Transaction not found");
+                res.rollback(getXidByTransactionID(transactionId));
             }
-        } catch (MySQLSyntaxErrorException e) {
+        } catch (XAException e) {
             e.printStackTrace();
-            throw new ExecuteTransactionRejectedException(e.getMessage());
+            if(e.errorCode == XAException.XAER_NOTA) {
+                // XID Not Found
+                throw new ExecuteTransactionNotFoundException(e.getMessage());
+            } else {
+                throw new ExecuteTransactionRejectedException(e.getMessage());
+            }
         } catch (SQLException e) {
             e.printStackTrace();
             throw new ExecuteTransactionException(e.getMessage());
-        }
-    }
-
-    public static class DeleteTransactionException extends Exception {
-        DeleteTransactionException(String s) {
-            super(s);
-        }
-    }
-
-    public static class DeleteTransactionNotFoundException extends DeleteTransactionException {
-        DeleteTransactionNotFoundException(String s) {
-            super(s);
-        }
-    }
-
-    public void deleteTransaction(int transactionId, String token) throws DeleteTransactionException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("DELETE FROM transaction WHERE id = ? AND token = ?")) {
-            stmt.setInt(1, transactionId);
-            stmt.setString(2, token);
-            if (stmt.executeUpdate() <= 0) { // failed
-                throw new DeleteTransactionNotFoundException("Transaction not found");
-            }
-        } catch (SQLException e) {
-            e.printStackTrace();
-            throw new DeleteTransactionException(e.getMessage());
         }
     }
 }

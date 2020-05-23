@@ -168,24 +168,9 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
 
         if (requestBody.operation == TransactionOperation.COMMIT) {
             try {
-                DbHelper.getInstance().executeTransaction(requestBody.transactionId, token);
+                DbHelper.getInstance().executeTransaction(requestBody.transactionId, token, requestBody.operation == TransactionOperation.COMMIT);
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-                try {
-                    DbHelper.getInstance().deleteTransaction(requestBody.transactionId, token);
-                } catch (Exception e) {
-                    System.out.println("Transaction delete failed after successful commit");
-                }
             } catch (DbHelper.ExecuteTransactionException e) {
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            } catch (Exception e) {
-                e.printStackTrace();
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-            }
-        } else if (requestBody.operation == TransactionOperation.CANCEL) {
-            try {
-                DbHelper.getInstance().deleteTransaction(requestBody.transactionId, token);
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-            } catch (DbHelper.DeleteTransactionNotFoundException e) {
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             } catch (Exception e) {
                 e.printStackTrace();
