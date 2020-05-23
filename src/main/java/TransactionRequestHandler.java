@@ -7,8 +7,6 @@ import org.apache.http.nio.protocol.*;
 import org.apache.http.protocol.HttpContext;
 
 import java.io.IOException;
-import java.net.URI;
-import java.net.URLDecoder;
 
 public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRequest> {
 

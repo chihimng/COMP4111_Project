@@ -3,9 +3,7 @@ import org.apache.http.impl.nio.bootstrap.HttpServer;
 import org.apache.http.impl.nio.bootstrap.ServerBootstrap;
 import org.apache.http.impl.nio.reactor.IOReactorConfig;
 
-import java.io.IOException;
 import java.util.concurrent.TimeUnit;
-
 
 public class ApiServer {
     public static void main(String[] args) {

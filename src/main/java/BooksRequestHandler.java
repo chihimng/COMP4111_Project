@@ -8,9 +8,6 @@ import org.apache.http.protocol.HttpContext;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLDecoder;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -66,7 +63,6 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
             default:
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
                 httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
-                return;
         }
     }
 
