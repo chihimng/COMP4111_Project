@@ -356,18 +356,28 @@ public class DbHelper {
 
     public int createTransaction(String token) throws CreateTransactionException {
         // Try with resources to leverage AutoClosable implementation
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (token) VALUES (?)"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
-            stmt.setString(1, token);
-            if (stmt.executeUpdate() > 0) { // success
-                ResultSet rs = getIdStmt.executeQuery();
-                if (rs.next()) {
-                    return rs.getInt(1);
-                } else {
-                    throw new CreateTransactionException("failed to get last inserted id");
+        int id = 0;
+        try (Connection conn = this.ds.getConnection();
+             PreparedStatement queryStmt = conn.prepareStatement("SELECT * FROM transaction WHERE token = ? AND last_modified > CURRENT_TIMESTAMP() - 120");
+             PreparedStatement replaceStmt = conn.prepareStatement("REPLACE INTO transaction SET token = ?");
+             PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
+
+            queryStmt.setString(1, token);
+            ResultSet rs = queryStmt.executeQuery();
+            if (rs.next()) { // id found
+                id = rs.getInt("id");
+            } else {
+                replaceStmt.setString(1, token);
+                if (replaceStmt.executeUpdate() > 0) { //
+                    ResultSet idRs = getIdStmt.executeQuery();
+                    if (idRs.next()) {
+                        id = idRs.getInt(1);
+                    } else { // failed
+                        throw new CreateTransactionException("this should not happen: updated 0 rows without exception");
+                    }
                 }
-            } else { // failed
-                throw new CreateTransactionException("this should not happen: updated 0 rows without exception");
             }
+            return id;
         } catch (SQLException e) {
             e.printStackTrace();
             throw new CreateTransactionException(e.getMessage());
