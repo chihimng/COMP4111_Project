@@ -31,7 +31,7 @@ public class ApiServer {
                 .registerHandler("/BookManagementService/login", new LoginRequestHandler())
                 .registerHandler("/BookManagementService/logout", new LogoutRequestHandler())
                 .registerHandler("/BookManagementService/books*", new BooksRequestHandler())
-//                .registerHandler("/BookManagementService/transaction*", new TransactionRequestHandler())
+                .registerHandler("/BookManagementService/transaction*", new TransactionRequestHandler())
                 .create();
 
         try {
