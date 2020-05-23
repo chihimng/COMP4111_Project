@@ -1,3 +1,5 @@
+use comp4111;
+
 create table book
 (
 	id smallint unsigned auto_increment

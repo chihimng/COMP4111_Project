@@ -12,9 +12,15 @@ Test Cases: [Link](https://course.cse.ust.hk/comp4111/test_cases.html)
 
 > Prerequisite: Docker and Docker Compose already installed
 
+Demo Video: [Link](https://drive.google.com/open?id=1e3nWmrLkJCzyXsRoxVB4x3LUnt7ImoVm)
+
 This script spins up a docker compose stack containing a mysql and a java runner instance.
 
 Remember to initialize database schema (`schema.sql`) with a database client (e.g. DataGrip) before testing.
+
+Database `comp4111` is auto-created on first launch. If db is missing please try to clean docker data and try again.
+
+Database Account: username `comp4111`, password `comp4111`
 
 Ports 8080 and 3306 are mapped to the host for easy debug / testing.
 
