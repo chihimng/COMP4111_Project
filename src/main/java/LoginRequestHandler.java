@@ -4,13 +4,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.nio.protocol.*;
 import org.apache.http.protocol.HttpContext;
-import org.apache.http.protocol.HttpRequestHandler;
-
 import java.io.IOException;
 
-public class LoginRequestHandler implements HttpRequestHandler {
-     public static class RequestBody {
+public class LoginRequestHandler implements HttpAsyncRequestHandler<HttpRequest> {
+    public static class RequestBody {
         @JsonProperty("Username")
         public String username;
 
@@ -29,6 +28,7 @@ public class LoginRequestHandler implements HttpRequestHandler {
             return this.username == null || this.username.isEmpty() || this.password == null || this.password.isEmpty();
         }
     }
+
     public static class ResponseBody {
         @JsonProperty("Token")
         public String token;
@@ -39,19 +39,30 @@ public class LoginRequestHandler implements HttpRequestHandler {
             this.token = token;
         }
     }
+
     @Override
-    public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public HttpAsyncRequestConsumer<HttpRequest> processRequest(HttpRequest request, HttpContext context) throws HttpException, IOException {
+        // Buffer request content in memory for simplicity
+        return new BasicAsyncRequestConsumer();
+    }
+
+    @Override
+    public void handle(HttpRequest data, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+        HttpRequest request = httpExchange.getRequest();
+        HttpResponse response = httpExchange.getResponse();
         RequestBody requestBody;
         try {
             requestBody = ParsingHelper.parseRequestBody(request, RequestBody.class);
         } catch (Exception e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;
         }
         if (requestBody == null || requestBody.isEmpty()) {
             // FIXME: update to align with api spec
             System.out.println("Username or Password empty");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;
         }
 
@@ -72,6 +83,8 @@ public class LoginRequestHandler implements HttpRequestHandler {
             e.printStackTrace();
             // FIXME: update to align with api spec
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        } finally {
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
         }
     }
 }
