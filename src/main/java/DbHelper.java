@@ -23,8 +23,6 @@ public class DbHelper {
 
     private MysqlDataSource ds;
 
-    // Properties & Constructor
-    private String dbUrl = "jdbc:mysql://localhost:3306/comp4111?user=comp4111&password=comp4111&useSSL=false";
     private static int TRANSACTION_TIMEOUT_SECONDS = 120;
 
     private DbHelper() throws Exception {
@@ -35,9 +33,11 @@ public class DbHelper {
         // Import Config
         try {
             String env = System.getenv("DB_URL");
+            // Properties & Constructor
+            String dbUrl = "jdbc:mysql://localhost:3306/comp4111?user=comp4111&password=comp4111&useSSL=false";
             if (env != null) dbUrl = "jdbc:" + env;
             this.ds = new MysqlDataSource();
-            this.ds.setUrl(this.dbUrl);
+            this.ds.setUrl(dbUrl);
         } catch (Exception e) {
             System.out.println("Failed to load db host from env, reverting to default");
         }
