@@ -3,8 +3,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.nio.protocol.*;
 import org.apache.http.protocol.HttpContext;
-import org.apache.http.protocol.HttpRequestHandler;
 
 import java.io.IOException;
 import java.net.URI;
@@ -14,7 +14,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class BooksRequestHandler implements HttpRequestHandler {
+public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest> {
     public static class ResponseBody {
         @JsonProperty("Token")
         public String token;
@@ -25,51 +25,66 @@ public class BooksRequestHandler implements HttpRequestHandler {
             this.token = token;
         }
     }
+
     @Override
-    public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public HttpAsyncRequestConsumer<HttpRequest> processRequest(HttpRequest request, HttpContext context) throws HttpException, IOException {
+        // Buffer request content in memory for simplicity
+        return new BasicAsyncRequestConsumer();
+    }
+
+    @Override
+    public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+        HttpResponse response = httpExchange.getResponse();
         try {
             String token = ParsingHelper.getTokenFromRequest(request);
             if (token == null || !DbHelper.getInstance().validateToken(token)) {
                 // Invalid token
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
                 return;
             }
         } catch (Exception e) {
             e.printStackTrace();
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;
         }
 
         switch (request.getRequestLine().getMethod()) {
             case "POST":
-                handleCreate(request, response, context);
-                break;
+                handleCreate(request, httpExchange, context);
+                return;
             case "GET":
-                handleSearch(request, response, context);
-                break;
+                handleSearch(request, httpExchange, context);
+                return;
             case "PUT":
-                handleAvailability(request, response, context);
-                break;
+                handleAvailability(request, httpExchange, context);
+                return;
             case "DELETE":
-                handleDeletion(request, response, context);
-                break;
+                handleDeletion(request, httpExchange, context);
+                return;
             default:
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
+                httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+                return;
         }
     }
 
-    public void handleCreate(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleCreate(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+        HttpResponse response = httpExchange.getResponse();
         Book requestBody;
         try {
             requestBody = ParsingHelper.parseRequestBody(request, Book.class);
         } catch (Exception e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;
         }
         if (requestBody == null || !requestBody.isValid()) {
             // FIXME: update to align with api spec
             System.out.println("Book data invalid");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;
         }
 
@@ -93,6 +108,8 @@ public class BooksRequestHandler implements HttpRequestHandler {
             e.printStackTrace();
             // FIXME: update to align with api spec
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        } finally {
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
         }
     }
     public static class SearchResponseBody {
@@ -110,9 +127,9 @@ public class BooksRequestHandler implements HttpRequestHandler {
         }
     }
 
-    public void handleSearch(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleSearch(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+        HttpResponse response = httpExchange.getResponse();
         Map<String, String> param = ParsingHelper.parseRequestQuery(request);
-
         try {
             response.setStatusCode(HttpStatus.SC_CREATED);
             List<Book> books = DbHelper.getInstance().searchBook(param.get("id"), param.get("title"), param.get("author"), param.get("sort"), param.get("order"), param.get("limit"));
@@ -128,6 +145,8 @@ public class BooksRequestHandler implements HttpRequestHandler {
             e.printStackTrace();
             // FIXME: update to align with api spec
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        } finally {
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
         }
     }
 
@@ -142,20 +161,24 @@ public class BooksRequestHandler implements HttpRequestHandler {
         }
     }
 
-    public void handleAvailability(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleAvailability(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+        HttpResponse response = httpExchange.getResponse();
         AvailabilityRequestBody requestBody;
         try {
             requestBody = ParsingHelper.parseRequestBody(request, AvailabilityRequestBody.class);
         } catch (Exception e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;
         }
         if (requestBody == null) {
             // FIXME: update to align with api spec
             System.out.println("Availability of book not set");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;
         }
+
         URI uri = URI.create(request.getRequestLine().getUri());
         String path = uri.getPath();
         String idStr = path.substring(path.lastIndexOf('/') + 1);
@@ -186,10 +209,13 @@ public class BooksRequestHandler implements HttpRequestHandler {
             e.printStackTrace();
             // FIXME: update to align with api spec
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        } finally {
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
         }
     }
 
-    public void handleDeletion(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleDeletion(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+        HttpResponse response = httpExchange.getResponse();
         try {
             URI uri = URI.create(request.getRequestLine().getUri());
             String path = uri.getPath();
@@ -206,6 +232,8 @@ public class BooksRequestHandler implements HttpRequestHandler {
             e.printStackTrace();
             // FIXME: update to align with api spec
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+        } finally {
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
         }
     }
 }
