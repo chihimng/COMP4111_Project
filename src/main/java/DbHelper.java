@@ -36,6 +36,8 @@ public class DbHelper {
         try {
             String env = System.getenv("DB_URL");
             if (env != null) dbUrl = "jdbc:" + env;
+            this.ds = new MysqlDataSource();
+            this.ds.setUrl(this.dbUrl);
         } catch (Exception e) {
             System.out.println("Failed to load db host from env, reverting to default");
         }
@@ -356,25 +358,14 @@ public class DbHelper {
 
     public int createTransaction(String token) throws CreateTransactionException {
         // Try with resources to leverage AutoClosable implementation
-        int id = 0;
-        try (Connection conn = this.ds.getConnection();
-             PreparedStatement queryStmt = conn.prepareStatement("SELECT * FROM transaction WHERE token = ? AND last_modified > CURRENT_TIMESTAMP() - 120");
-             PreparedStatement replaceStmt = conn.prepareStatement("REPLACE INTO transaction SET token = ?"); // Using REPLACE to overwrite transaction for existing token, or insert if token is unique
-             PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
-
-            queryStmt.setString(1, token);
-            ResultSet rs = queryStmt.executeQuery();
-            if (rs.next()) { // id found
-                id = rs.getInt("id");
-            } else {
-                replaceStmt.setString(1, token);
-                if (replaceStmt.executeUpdate() > 0) { //
-                    ResultSet idRs = getIdStmt.executeQuery();
-                    if (idRs.next()) {
-                        id = idRs.getInt(1);
-                    } else { // failed
-                        throw new CreateTransactionException("this should not happen: updated 0 rows without exception");
-                    }
+        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("INSERT INTO transaction (token) VALUES (?)"); PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
+            stmt.setString(1, token);
+            if (stmt.executeUpdate() > 0) { // success
+                ResultSet rs = getIdStmt.executeQuery();
+                if (rs.next()) {
+                    return rs.getInt(1);
+                } else {
+                    throw new CreateTransactionException("failed to get last inserted id");
                 }
             }
             return id;
@@ -397,8 +388,7 @@ public class DbHelper {
     }
 
     public void appendTransaction(int transactionId, String token, TransactionRequestHandler.TransactionPutAction action, int bookId) throws AppendTransactionException {
-        try (Connection conn = this.ds.getConnection();
-             PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = CURRENT_TIMESTAMP(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ? AND last_modified > CURRENT_TIMESTAMP() - 120")) {
+        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ?")) {
             PreparedStatement saveStmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
             saveStmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             saveStmt.setInt(2, bookId);
@@ -437,7 +427,7 @@ public class DbHelper {
     }
 
     public void executeTransaction(int transactionId, String token) throws ExecuteTransactionException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ? AND token = ? AND last_modified > CURRENT_TIMESTAMP() - 120")) {
+        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ? AND token = ?")) {
             stmt.setInt(1, transactionId);
             stmt.setString(2, token);
             ResultSet rs = stmt.executeQuery();
