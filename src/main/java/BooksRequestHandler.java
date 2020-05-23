@@ -136,10 +136,12 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
             SearchResponseBody responseBody = new SearchResponseBody(books);
             ObjectMapper mapper = new ObjectMapper();
             StringEntity body = new StringEntity(
-                mapper.writeValueAsString(responseBody),
-                ContentType.APPLICATION_JSON
+                    mapper.writeValueAsString(responseBody),
+                    ContentType.APPLICATION_JSON
             );
             response.setEntity(body);
+        } catch (DbHelper.SearchBookBadRequestException e) {
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
         } catch (Exception e) {
             e.printStackTrace();
             // FIXME: update to align with api spec
