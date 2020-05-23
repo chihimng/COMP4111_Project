@@ -47,8 +47,7 @@ public class LoginRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
     }
 
     @Override
-    public void handle(HttpRequest data, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
-        HttpRequest request = httpExchange.getRequest();
+    public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
         HttpResponse response = httpExchange.getResponse();
         RequestBody requestBody;
         try {

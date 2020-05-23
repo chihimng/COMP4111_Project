@@ -18,8 +18,7 @@ public class LogoutRequestHandler implements HttpAsyncRequestHandler<HttpRequest
     }
 
     @Override
-    public void handle(HttpRequest data, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
-        HttpRequest request = httpExchange.getRequest();
+    public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
         HttpResponse response = httpExchange.getResponse();
         String token = ParsingHelper.getTokenFromRequest(request);
         if (token == null || token.isEmpty()) {

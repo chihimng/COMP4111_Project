@@ -17,7 +17,7 @@ public class HelloWorldRequestHandler implements HttpAsyncRequestHandler<HttpReq
     }
 
     @Override
-    public void handle(HttpRequest data, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
         HttpResponse response = httpExchange.getResponse();
         response.setStatusCode(HttpStatus.SC_OK);
         String dbTestResult;
