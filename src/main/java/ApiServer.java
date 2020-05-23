@@ -41,12 +41,9 @@ public class ApiServer {
             return;
         }
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                System.out.println("API Server is shutting down after 5 seconds grace period");
-                server.shutdown(5, TimeUnit.SECONDS);
-            }
-        });
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            System.out.println("API Server is shutting down after 5 seconds grace period");
+            server.shutdown(5, TimeUnit.SECONDS);
+        }));
     }
 }

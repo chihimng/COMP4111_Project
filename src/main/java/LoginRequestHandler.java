@@ -48,42 +48,44 @@ public class LoginRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
 
     @Override
     public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
-        HttpResponse response = httpExchange.getResponse();
-        RequestBody requestBody;
-        try {
-            requestBody = ParsingHelper.parseRequestBody(request, RequestBody.class);
-        } catch (Exception e) {
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
-            return;
-        }
-        if (requestBody == null || requestBody.isEmpty()) {
-            // FIXME: update to align with api spec
-            System.out.println("Username or Password empty");
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
-            return;
-        }
+        new Thread(() -> {
+            HttpResponse response = httpExchange.getResponse();
+            RequestBody requestBody;
+            try {
+                requestBody = ParsingHelper.parseRequestBody(request, RequestBody.class);
+            } catch (Exception e) {
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+                return;
+            }
+            if (requestBody == null || requestBody.isEmpty()) {
+                // FIXME: update to align with api spec
+                System.out.println("Username or Password empty");
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+                return;
+            }
 
-        try {
-            response.setStatusCode(HttpStatus.SC_OK);
-            ResponseBody responseBody = new ResponseBody(DbHelper.getInstance().signIn(requestBody.username, requestBody.password));
-            ObjectMapper mapper = new ObjectMapper();
-            StringEntity body = new StringEntity(
-                mapper.writeValueAsString(responseBody),
-                ContentType.APPLICATION_JSON
-            );
-            response.setEntity(body);
-        } catch (DbHelper.SignInConflictException e) {
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CONFLICT);
-        } catch (DbHelper.SignInBadRequestException e) {
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-        } catch (Exception e) {
-            e.printStackTrace();
-            // FIXME: update to align with api spec
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-        } finally {
-            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
-        }
+            try {
+                response.setStatusCode(HttpStatus.SC_OK);
+                ResponseBody responseBody = new ResponseBody(DbHelper.getInstance().signIn(requestBody.username, requestBody.password));
+                ObjectMapper mapper = new ObjectMapper();
+                StringEntity body = new StringEntity(
+                        mapper.writeValueAsString(responseBody),
+                        ContentType.APPLICATION_JSON
+                );
+                response.setEntity(body);
+            } catch (DbHelper.SignInConflictException e) {
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CONFLICT);
+            } catch (DbHelper.SignInBadRequestException e) {
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+            } catch (Exception e) {
+                e.printStackTrace();
+                // FIXME: update to align with api spec
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            } finally {
+                httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+            }
+        }).start();
     }
 }

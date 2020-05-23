@@ -18,33 +18,35 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
 
     @Override
     public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
-        HttpResponse response = httpExchange.getResponse();
-        try {
-            String token = ParsingHelper.getTokenFromRequest(request);
-            if (token == null || !DbHelper.getInstance().validateToken(token)) {
-                // Invalid token
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+        new Thread(() -> {
+            HttpResponse response = httpExchange.getResponse();
+            try {
+                String token = ParsingHelper.getTokenFromRequest(request);
+                if (token == null || !DbHelper.getInstance().validateToken(token)) {
+                    // Invalid token
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                    httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+                    return;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
                 httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
                 return;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
-            return;
-        }
 
-        switch (request.getRequestLine().getMethod()) {
-            case "POST":
-                handleManage(request, httpExchange, context);
-                return;
-            case "PUT":
-                handleAppend(request, httpExchange, context);
-                return;
-            default:
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
-                httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
-        }
+            switch (request.getRequestLine().getMethod()) {
+                case "POST":
+                    handleManage(request, httpExchange, context);
+                    return;
+                case "PUT":
+                    handleAppend(request, httpExchange, context);
+                    return;
+                default:
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
+                    httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+            }
+        }).start();
     }
 
     public enum TransactionOperation {
@@ -110,7 +112,7 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
         }
     }
 
-    public void handleManage(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handleManage(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) {
         HttpResponse response = httpExchange.getResponse();
         try {
             HttpEntityEnclosingRequest entityEnclosingRequest = ParsingHelper.castHttpEntityRequest(request);
@@ -123,10 +125,14 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
         } catch (ClassCastException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+        } catch (IOException e) {
+            e.printStackTrace();
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
         }
     }
 
-    public void handleCreate(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handleCreate(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) {
         HttpResponse response = httpExchange.getResponse();
         try {
             String token = ParsingHelper.getTokenFromRequest(request);
@@ -148,13 +154,13 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
         }
     }
 
-    public void handleOperation(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handleOperation(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) {
         HttpResponse response = httpExchange.getResponse();
 
-        String token = ParsingHelper.getTokenFromRequest(request);
-
+        String token;
         TransactionPostRequestBody requestBody;
         try {
+            token = ParsingHelper.getTokenFromRequest(request);
             requestBody = ParsingHelper.parseRequestBody(request, TransactionPostRequestBody.class);
         } catch (Exception e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
@@ -162,8 +168,8 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
             return;
         }
 
-        if (requestBody == null) {
-            System.out.println("Request body is null");
+        if (token == null || requestBody == null) {
+            System.out.println("Token or request body is null");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;
@@ -204,11 +210,12 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
         }
     }
 
-    public void handleAppend(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handleAppend(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) {
         HttpResponse response = httpExchange.getResponse();
+        String token;
         TransactionPutRequestBody requestBody;
-        String token = ParsingHelper.getTokenFromRequest(request);
         try {
+            token = ParsingHelper.getTokenFromRequest(request);
             requestBody = ParsingHelper.parseRequestBody(request, TransactionPutRequestBody.class);
         } catch (Exception e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
@@ -216,8 +223,8 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
             return;
         }
 
-        if (requestBody == null) {
-            System.out.println("Request body is null");
+        if (token == null || requestBody == null) {
+            System.out.println("Token or request body is null");
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
             return;

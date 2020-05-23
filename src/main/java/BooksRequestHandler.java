@@ -31,42 +31,44 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
 
     @Override
     public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
-        HttpResponse response = httpExchange.getResponse();
-        try {
-            String token = ParsingHelper.getTokenFromRequest(request);
-            if (token == null || !DbHelper.getInstance().validateToken(token)) {
-                // Invalid token
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+        new Thread(() -> {
+            HttpResponse response = httpExchange.getResponse();
+            try {
+                String token = ParsingHelper.getTokenFromRequest(request);
+                if (token == null || !DbHelper.getInstance().validateToken(token)) {
+                    // Invalid token
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                    httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+                    return;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
                 httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
                 return;
             }
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
-            return;
-        }
 
-        switch (request.getRequestLine().getMethod()) {
-            case "POST":
-                handleCreate(request, httpExchange, context);
-                return;
-            case "GET":
-                handleSearch(request, httpExchange, context);
-                return;
-            case "PUT":
-                handleAvailability(request, httpExchange, context);
-                return;
-            case "DELETE":
-                handleDeletion(request, httpExchange, context);
-                return;
-            default:
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
-                httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
-        }
+            switch (request.getRequestLine().getMethod()) {
+                case "POST":
+                    handleCreate(request, httpExchange, context);
+                    return;
+                case "GET":
+                    handleSearch(request, httpExchange, context);
+                    return;
+                case "PUT":
+                    handleAvailability(request, httpExchange, context);
+                    return;
+                case "DELETE":
+                    handleDeletion(request, httpExchange, context);
+                    return;
+                default:
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
+                    httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+            }
+        }).start();
     }
 
-    public void handleCreate(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handleCreate(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) {
         HttpResponse response = httpExchange.getResponse();
         Book requestBody;
         try {
@@ -123,10 +125,11 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
         }
     }
 
-    public void handleSearch(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handleSearch(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) {
         HttpResponse response = httpExchange.getResponse();
-        Map<String, String> param = ParsingHelper.parseRequestQuery(request);
+        Map<String, String> param;
         try {
+            param = ParsingHelper.parseRequestQuery(request);
             response.setStatusCode(HttpStatus.SC_CREATED);
             List<Book> books = DbHelper.getInstance().searchBook(param.get("id"), param.get("title"), param.get("author"), param.get("sort"), param.get("order"), param.get("limit"));
             response.setStatusCode(HttpStatus.SC_OK);
@@ -157,7 +160,7 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
         }
     }
 
-    public void handleAvailability(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handleAvailability(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) {
         HttpResponse response = httpExchange.getResponse();
         AvailabilityRequestBody requestBody;
         try {
@@ -210,7 +213,7 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
         }
     }
 
-    public void handleDeletion(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+    public void handleDeletion(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) {
         HttpResponse response = httpExchange.getResponse();
         try {
             URI uri = URI.create(request.getRequestLine().getUri());
