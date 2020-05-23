@@ -398,7 +398,7 @@ public class DbHelper {
 
     public void appendTransaction(int transactionId, String token, TransactionRequestHandler.TransactionPutAction action, int bookId) throws AppendTransactionException {
         try (Connection conn = this.ds.getConnection();
-             PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ? AND last_modified > CURRENT_TIMESTAMP() - 120")) {
+             PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = CURRENT_TIMESTAMP(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ? AND last_modified > CURRENT_TIMESTAMP() - 120")) {
             PreparedStatement saveStmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
             saveStmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             saveStmt.setInt(2, bookId);
