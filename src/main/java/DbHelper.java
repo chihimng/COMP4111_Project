@@ -397,7 +397,8 @@ public class DbHelper {
     }
 
     public void appendTransaction(int transactionId, String token, TransactionRequestHandler.TransactionPutAction action, int bookId) throws AppendTransactionException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ?")) {
+        try (Connection conn = this.ds.getConnection();
+             PreparedStatement stmt = conn.prepareStatement("UPDATE transaction SET last_modified = NOW(), statement = CONCAT(statement, ?) WHERE id = ? AND token = ? AND last_modified > CURRENT_TIMESTAMP() - 120")) {
             PreparedStatement saveStmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
             saveStmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             saveStmt.setInt(2, bookId);
@@ -429,12 +430,6 @@ public class DbHelper {
         }
     }
 
-    public static class ExecuteTransactionExpiredException extends ExecuteTransactionException {
-        ExecuteTransactionExpiredException(String s) {
-            super(s);
-        }
-    }
-
     public static class ExecuteTransactionRejectedException extends ExecuteTransactionException {
         ExecuteTransactionRejectedException(String s) {
             super(s);
@@ -442,15 +437,11 @@ public class DbHelper {
     }
 
     public void executeTransaction(int transactionId, String token) throws ExecuteTransactionException {
-        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ? AND token = ?")) {
+        try (Connection conn = this.ds.getConnection(); PreparedStatement stmt = conn.prepareStatement("SELECT * FROM transaction WHERE id = ? AND token = ? AND last_modified > CURRENT_TIMESTAMP() - 120")) {
             stmt.setInt(1, transactionId);
             stmt.setString(2, token);
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
-                if (rs.getTimestamp("last_modified").before(Date.from(Instant.now().minusSeconds(120)))) { // 2 minutes timeout
-                    System.out.println("Expired");
-                    throw new ExecuteTransactionExpiredException("Transaction expired");
-                }
                 ArrayList<String> statement = new ArrayList<>(Arrays.asList(rs.getString("statement").split(";")));
                 Statement commitStmt = conn.createStatement();
                 conn.setAutoCommit(false);
