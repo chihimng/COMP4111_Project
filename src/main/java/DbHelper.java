@@ -447,8 +447,12 @@ public class DbHelper {
                 for (String s : statement) {
                     commitStmt.addBatch(s);
                 }
-                commitStmt.executeBatch();
-                conn.commit();
+                boolean error = Arrays.stream(commitStmt.executeBatch()).anyMatch(i -> i == 0);
+                if(error) {
+                    conn.rollback();
+                } else {
+                    conn.commit();
+                }
                 conn.setAutoCommit(true);
             } else {
                 throw new ExecuteTransactionNotFoundException("Transaction not found");
