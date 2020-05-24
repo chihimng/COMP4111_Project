@@ -453,10 +453,12 @@ public class DbHelper {
                 boolean error = Arrays.stream(commitStmt.executeBatch()).anyMatch(i -> i == 0);
                 if(error) {
                     conn.rollback();
+                    conn.setAutoCommit(true);
+                    throw new ExecuteTransactionRejectedException("Transaction failure, transaction rollback");
                 } else {
                     conn.commit();
+                    conn.setAutoCommit(true);
                 }
-                conn.setAutoCommit(true);
             } else {
                 throw new ExecuteTransactionNotFoundException("Transaction not found");
             }
