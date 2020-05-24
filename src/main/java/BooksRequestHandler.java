@@ -99,7 +99,7 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
             }
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CONFLICT);
-            response.setHeader(HttpHeaders.LOCATION, "/books/" + id);
+            response.setHeader("Duplicate record", "/books/" + id);
         } catch (Exception e) {
             e.printStackTrace();
             // FIXME: update to align with api spec
