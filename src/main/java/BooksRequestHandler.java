@@ -85,7 +85,7 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
         }
 
         try {
-            response.setStatusCode(HttpStatus.SC_CREATED);
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CREATED);
             int id = DbHelper.getInstance().createBook(requestBody);
             response.setHeader(HttpHeaders.LOCATION, "/books/" + id);
         } catch (DbHelper.CreateBookConflictException e) {
@@ -99,7 +99,7 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
             }
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CONFLICT);
-            response.setHeader(HttpHeaders.LOCATION, "/books/" + id);
+            response.setHeader("Duplicate record", "/books/" + id);
         } catch (Exception e) {
             e.printStackTrace();
             // FIXME: update to align with api spec
@@ -109,8 +109,7 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
     public static class SearchResponseBody {
         @JsonProperty("FoundBooks")
         public int foundBooks() {
-            if (this.results == null) return 0;
-            return this.results.size();
+            return this.results != null ? this.results.size() : 0;
         }
         @JsonProperty("Results")
         public List<Book> results;
@@ -125,9 +124,14 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
         Map<String, String> param;
         try {
             param = ParsingHelper.parseRequestQuery(request);
-            response.setStatusCode(HttpStatus.SC_CREATED);
-            List<Book> books = DbHelper.getInstance().searchBook(param.get("id"), param.get("title"), param.get("author"), param.get("sort"), param.get("order"), param.get("limit"));
-            response.setStatusCode(HttpStatus.SC_OK);
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CREATED);
+            List<Book> books = DbHelper.getInstance().searchBook(param.get("id"), param.get("title"), param.get("author"), param.get("sortby"), param.get("order"), param.get("limit"));
+            if (books.size() <= 0) {
+                // no book found, return 204
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NO_CONTENT);
+                return;
+            }
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
             SearchResponseBody responseBody = new SearchResponseBody(books);
             ObjectMapper mapper = new ObjectMapper();
             StringEntity body = new StringEntity(
