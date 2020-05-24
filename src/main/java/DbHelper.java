@@ -359,7 +359,7 @@ public class DbHelper {
         int id = 0;
         try (Connection conn = this.ds.getConnection();
              PreparedStatement queryStmt = conn.prepareStatement("SELECT * FROM transaction WHERE token = ? AND last_modified > CURRENT_TIMESTAMP() - 120");
-             PreparedStatement replaceStmt = conn.prepareStatement("REPLACE INTO transaction SET token = ?");
+             PreparedStatement replaceStmt = conn.prepareStatement("REPLACE INTO transaction SET token = ?"); // Using REPLACE to overwrite transaction for existing token, or insert if token is unique
              PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
 
             queryStmt.setString(1, token);
