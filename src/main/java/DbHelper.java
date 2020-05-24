@@ -259,12 +259,10 @@ public class DbHelper {
                 e.printStackTrace();
                 throw new SearchBookBadRequestException("failed to parse limit to int");
             }
-            if (limitCount != null) {
-                if (limitCount < 0) {
-                    throw new SearchBookBadRequestException("limit not positive int");
-                }
-                query += " LIMIT " + limitCount.toString();
+            if (limitCount < 0) {
+                throw new SearchBookBadRequestException("limit not positive int");
             }
+            query += " LIMIT " + limitCount.toString();
         }
         query += ";";
         System.out.println(clauses.toString());
