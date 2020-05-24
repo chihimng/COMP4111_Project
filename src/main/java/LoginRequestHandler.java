@@ -67,7 +67,7 @@ public class LoginRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
             }
 
             try {
-                response.setStatusCode(HttpStatus.SC_OK);
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
                 ResponseBody responseBody = new ResponseBody(DbHelper.getInstance().signIn(requestBody.username, requestBody.password));
                 ObjectMapper mapper = new ObjectMapper();
                 StringEntity body = new StringEntity(

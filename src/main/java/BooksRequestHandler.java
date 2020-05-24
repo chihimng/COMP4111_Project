@@ -85,7 +85,7 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
         }
 
         try {
-            response.setStatusCode(HttpStatus.SC_CREATED);
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CREATED);
             int id = DbHelper.getInstance().createBook(requestBody);
             response.setHeader(HttpHeaders.LOCATION, "/books/" + id);
         } catch (DbHelper.CreateBookConflictException e) {

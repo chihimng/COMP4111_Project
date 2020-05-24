@@ -1,7 +1,4 @@
-import org.apache.http.HttpException;
-import org.apache.http.HttpRequest;
-import org.apache.http.HttpResponse;
-import org.apache.http.HttpStatus;
+import org.apache.http.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.nio.protocol.*;
@@ -20,7 +17,7 @@ public class HelloWorldRequestHandler implements HttpAsyncRequestHandler<HttpReq
     public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
         new Thread(() -> {
             HttpResponse response = httpExchange.getResponse();
-            response.setStatusCode(HttpStatus.SC_OK);
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
             String dbTestResult;
             try {
                 dbTestResult = DbHelper.getInstance().test();
