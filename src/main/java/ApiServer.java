@@ -1,11 +1,9 @@
-import org.apache.http.*;
-import org.apache.http.config.SocketConfig;
-import org.apache.http.impl.bootstrap.HttpServer;
-import org.apache.http.impl.bootstrap.ServerBootstrap;
+import org.apache.http.ExceptionLogger;
+import org.apache.http.impl.nio.bootstrap.HttpServer;
+import org.apache.http.impl.nio.bootstrap.ServerBootstrap;
+import org.apache.http.impl.nio.reactor.IOReactorConfig;
 
-import java.io.IOException;
 import java.util.concurrent.TimeUnit;
-
 
 public class ApiServer {
     public static void main(String[] args) {
@@ -16,15 +14,15 @@ public class ApiServer {
             System.out.println("Failed to obtain port config from env, reverting to 8080.");
         }
 
-        SocketConfig socketConfig = SocketConfig.custom()
-                .setSoTimeout(15000)
-                .setTcpNoDelay(true)
-                .build();
+        final IOReactorConfig config = IOReactorConfig.custom()
+            .setSoTimeout(15000)
+            .setTcpNoDelay(true)
+            .build();
 
         final HttpServer server = ServerBootstrap.bootstrap()
                 .setListenerPort(port)
                 .setServerInfo("ApiServer/1.0")
-                .setSocketConfig(socketConfig)
+                .setIOReactorConfig(config)
                 .setSslContext(null)
                 .setExceptionLogger(ExceptionLogger.STD_ERR)
                 .registerHandler("/", new HelloWorldRequestHandler())
@@ -44,7 +42,7 @@ public class ApiServer {
         }
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            System.out.println("API Server is shutting down with 5 seconds grace period");
+            System.out.println("API Server is shutting down after 5 seconds grace period");
             server.shutdown(5, TimeUnit.SECONDS);
         }));
     }

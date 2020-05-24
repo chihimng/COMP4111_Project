@@ -3,18 +3,15 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.http.*;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
+import org.apache.http.nio.protocol.*;
 import org.apache.http.protocol.HttpContext;
-import org.apache.http.protocol.HttpRequestHandler;
 
 import java.io.IOException;
 import java.net.URI;
-import java.net.URLDecoder;
-import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class BooksRequestHandler implements HttpRequestHandler {
+public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest> {
     public static class ResponseBody {
         @JsonProperty("Token")
         public String token;
@@ -25,40 +22,54 @@ public class BooksRequestHandler implements HttpRequestHandler {
             this.token = token;
         }
     }
-    @Override
-    public void handle(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        try {
-            String token = ParsingHelper.getTokenFromRequest(request);
-            if (token == null || !DbHelper.getInstance().validateToken(token)) {
-                // Invalid token
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-                return;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-            return;
-        }
 
-        switch (request.getRequestLine().getMethod()) {
-            case "POST":
-                handleCreate(request, response, context);
-                break;
-            case "GET":
-                handleSearch(request, response, context);
-                break;
-            case "PUT":
-                handleAvailability(request, response, context);
-                break;
-            case "DELETE":
-                handleDeletion(request, response, context);
-                break;
-            default:
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
-        }
+    @Override
+    public HttpAsyncRequestConsumer<HttpRequest> processRequest(HttpRequest request, HttpContext context) throws HttpException, IOException {
+        // Buffer request content in memory for simplicity
+        return new BasicAsyncRequestConsumer();
     }
 
-    public void handleCreate(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    @Override
+    public void handle(HttpRequest request, HttpAsyncExchange httpExchange, HttpContext context) throws HttpException, IOException {
+        new Thread(() -> {
+            HttpResponse response = httpExchange.getResponse();
+            try {
+                String token = ParsingHelper.getTokenFromRequest(request);
+                if (token == null || !DbHelper.getInstance().validateToken(token)) {
+                    // Invalid token
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
+                    httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+                    return;
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
+                httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+                return;
+            }
+
+            switch (request.getRequestLine().getMethod()) {
+                case "POST":
+                    handleCreate(request, response, context);
+                    break;
+                case "GET":
+                    handleSearch(request, response, context);
+                    break;
+                case "PUT":
+                    handleAvailability(request, response, context);
+                    break;
+                case "DELETE":
+                    handleDeletion(request, response, context);
+                    break;
+                default:
+                    response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NOT_IMPLEMENTED);
+                    break;
+            }
+            httpExchange.submitResponse(new BasicAsyncResponseProducer(response));
+        }).start();
+    }
+
+    public void handleCreate(HttpRequest request, HttpResponse response, HttpContext context) {
         Book requestBody;
         try {
             requestBody = ParsingHelper.parseRequestBody(request, Book.class);
@@ -110,20 +121,22 @@ public class BooksRequestHandler implements HttpRequestHandler {
         }
     }
 
-    public void handleSearch(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
-        Map<String, String> param = ParsingHelper.parseRequestQuery(request);
-
+    public void handleSearch(HttpRequest request, HttpResponse response, HttpContext context) {
+        Map<String, String> param;
         try {
+            param = ParsingHelper.parseRequestQuery(request);
             response.setStatusCode(HttpStatus.SC_CREATED);
             List<Book> books = DbHelper.getInstance().searchBook(param.get("id"), param.get("title"), param.get("author"), param.get("sort"), param.get("order"), param.get("limit"));
             response.setStatusCode(HttpStatus.SC_OK);
             SearchResponseBody responseBody = new SearchResponseBody(books);
             ObjectMapper mapper = new ObjectMapper();
             StringEntity body = new StringEntity(
-                mapper.writeValueAsString(responseBody),
-                ContentType.APPLICATION_JSON
+                    mapper.writeValueAsString(responseBody),
+                    ContentType.APPLICATION_JSON
             );
             response.setEntity(body);
+        } catch (DbHelper.SearchBookBadRequestException e) {
+            response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
         } catch (Exception e) {
             e.printStackTrace();
             // FIXME: update to align with api spec
@@ -142,7 +155,7 @@ public class BooksRequestHandler implements HttpRequestHandler {
         }
     }
 
-    public void handleAvailability(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleAvailability(HttpRequest request, HttpResponse response, HttpContext context) {
         AvailabilityRequestBody requestBody;
         try {
             requestBody = ParsingHelper.parseRequestBody(request, AvailabilityRequestBody.class);
@@ -156,6 +169,7 @@ public class BooksRequestHandler implements HttpRequestHandler {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             return;
         }
+
         URI uri = URI.create(request.getRequestLine().getUri());
         String path = uri.getPath();
         String idStr = path.substring(path.lastIndexOf('/') + 1);
@@ -189,7 +203,7 @@ public class BooksRequestHandler implements HttpRequestHandler {
         }
     }
 
-    public void handleDeletion(HttpRequest request, HttpResponse response, HttpContext context) throws HttpException, IOException {
+    public void handleDeletion(HttpRequest request, HttpResponse response, HttpContext context) {
         try {
             URI uri = URI.create(request.getRequestLine().getUri());
             String path = uri.getPath();

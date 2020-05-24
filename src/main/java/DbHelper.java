@@ -204,6 +204,12 @@ public class DbHelper {
         }
     }
 
+    public static class SearchBookBadRequestException extends SearchBookException {
+        SearchBookBadRequestException(String s) {
+            super(s);
+        }
+    }
+
     public List<Book> searchBook(String id, String title, String author, String sort, String order, String limit) throws SearchBookException {
         List<String> clauses = new ArrayList<String>();
         String query = "SELECT * FROM book";
@@ -244,8 +250,13 @@ public class DbHelper {
             try {
                 limitCount = Integer.parseInt(limit);
             } catch (Exception e) {
+                e.printStackTrace();
+                throw new SearchBookBadRequestException("failed to parse limit to int");
             }
             if (limitCount != null) {
+                if (limitCount < 0) {
+                    throw new SearchBookBadRequestException("limit not positive int");
+                }
                 query += " LIMIT " + limitCount.toString();
             }
         }

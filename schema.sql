@@ -1,3 +1,5 @@
+use comp4111;
+
 create table book
 (
 	id smallint unsigned auto_increment
@@ -46,13 +48,13 @@ BEGIN
     DECLARE counter INT DEFAULT 1;
 
     REPEAT
-        SET @suffix = LPAD(CAST(counter AS CHAR(3)), 3, '0');
+        SET @suffix = LPAD(CAST(counter AS CHAR(5)), 5, '0');
         SET @username = CONCAT("user", @suffix);
         SET @password = CONCAT("pass", @suffix);
         SET @salt = UUID();
         INSERT INTO user VALUES (@username, UNHEX(SHA2(CONCAT(@password, @salt), 256)), @salt);
         SET counter = counter + 1;
-    UNTIL counter > 100
+    UNTIL counter > 10000
     END REPEAT;
 END$$
 DELIMITER ;
