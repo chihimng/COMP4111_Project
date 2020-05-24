@@ -36,11 +36,13 @@ public class DbHelper {
         try {
             String env = System.getenv("DB_URL");
             if (env != null) dbUrl = "jdbc:" + env;
-            this.ds = new MysqlDataSource();
-            this.ds.setUrl(this.dbUrl);
         } catch (Exception e) {
             System.out.println("Failed to load db host from env, reverting to default");
         }
+
+        // Init data source
+        this.ds = new MysqlDataSource();
+        this.ds.setUrl(this.dbUrl);
     }
 
     public String test() throws Exception {
