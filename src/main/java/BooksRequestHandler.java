@@ -125,7 +125,7 @@ public class BooksRequestHandler implements HttpAsyncRequestHandler<HttpRequest>
         try {
             param = ParsingHelper.parseRequestQuery(request);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_CREATED);
-            List<Book> books = DbHelper.getInstance().searchBook(param.get("id"), param.get("title"), param.get("author"), param.get("sort"), param.get("order"), param.get("limit"));
+            List<Book> books = DbHelper.getInstance().searchBook(param.get("id"), param.get("title"), param.get("author"), param.get("sortby"), param.get("order"), param.get("limit"));
             if (books.size() <= 0) {
                 // no book found, return 204
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_NO_CONTENT);
