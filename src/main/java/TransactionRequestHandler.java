@@ -201,7 +201,7 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
         try {
             DbHelper.getInstance().appendTransaction(requestBody.transactionId, token, requestBody.action, requestBody.bookId);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-        } catch (DbHelper.AppendTransactionNotFoundException e) {
+        } catch (DbHelper.AppendTransactionNotFoundException | DbHelper.AppendTransactionInvalidException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
         } catch (Exception e) {
             e.printStackTrace();

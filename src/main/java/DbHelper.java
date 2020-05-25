@@ -1,7 +1,5 @@
+import com.mysql.jdbc.MySQLConnection;
 import com.mysql.jdbc.jdbc2.optional.*;
-
-import javax.transaction.xa.XAException;
-import javax.transaction.xa.XAResource;
 import javax.transaction.xa.Xid;
 import java.math.BigInteger;
 import java.sql.*;
@@ -21,8 +19,35 @@ public class DbHelper {
         return _singleton;
     }
 
-    private MysqlXADataSource dataSource;
-    private JDBC4MysqlXAConnection xaConnection;
+    public class ConnectionKey {
+        private int id;
+        private String token;
+
+        public ConnectionKey(int id, String token) {
+            this.id = id;
+            this.token = token;
+        }
+
+        @Override
+        public int hashCode() {
+            return id;
+        }
+
+        @Override
+        public boolean equals(Object obj) {
+            if (this == obj)
+                return true;
+            if (obj == null)
+                return false;
+            if (getClass() != obj.getClass())
+                return false;
+            ConnectionKey other = (ConnectionKey) obj;
+            return id == other.id && token.equals(other.token);
+        }
+    }
+
+    private MysqlDataSource dataSource;
+    private HashMap<ConnectionKey, Connection> txConnectionMap;
 
     private static int TRANSACTION_TIMEOUT_SECONDS = 120;
 
@@ -42,9 +67,9 @@ public class DbHelper {
             System.out.println("Failed to load db host from env, reverting to default");
         }
 
-        this.dataSource = new MysqlXADataSource();
+        this.dataSource = new MysqlDataSource();
         this.dataSource.setUrl(dbUrl);
-        this.xaConnection = (JDBC4MysqlXAConnection) this.dataSource.getXAConnection();
+        this.txConnectionMap = new HashMap<>();
     }
 
     public String test() throws Exception {
@@ -361,31 +386,23 @@ public class DbHelper {
     }
 
     public int createTransaction(String token) throws CreateTransactionException {
-        int id = 0;
-        try (Connection conn = this.dataSource.getConnection();
-             PreparedStatement queryStmt = conn.prepareStatement("SELECT * FROM transaction WHERE token = ? AND last_modified > CURRENT_TIMESTAMP() - 120");
-             PreparedStatement insertStmt = conn.prepareStatement("INSERT INTO transaction SET token = ?");
-             PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
-            // Get XA Resource
-            XAResource res = this.xaConnection.getXAResource();
-
-            queryStmt.setString(1, token);
-            ResultSet rs = queryStmt.executeQuery();
-            if (rs.next()) { // id found
-                id = rs.getInt("id");
-            } else {
-                insertStmt.setString(1, token);
-                if (insertStmt.executeUpdate() > 0) { //
-                    ResultSet idRs = getIdStmt.executeQuery();
-                    if (idRs.next()) {
-                        id = idRs.getInt(1);
-                        res.setTransactionTimeout(TRANSACTION_TIMEOUT_SECONDS);
-                        res.start(getXid(token, id), XAResource.TMNOFLAGS);
-                        res.end(getXid(token, id), XAResource.TMSUCCESS);
+        try {
+            for(Map.Entry<ConnectionKey, Connection> entry : txConnectionMap.entrySet()) {
+                try {
+                    if(entry.getKey().token.equals(token) && !entry.getValue().isClosed()) {
+                        return entry.getKey().id;
                     }
+                } catch (SQLException e) {
+                    e.printStackTrace();
                 }
             }
-            return id;
+
+            MySQLConnection conn = ((MySQLConnection) this.dataSource.getConnection());
+            this.txConnectionMap.put(new ConnectionKey((int) conn.getId(), token), conn);
+            conn.setAutoCommit(false);
+            conn.setQueryTimeoutKillsConnection(true);
+
+            return (int) conn.getId();
         } catch (Exception e) {
             e.printStackTrace();
             throw new CreateTransactionException(e.getMessage());
@@ -398,6 +415,12 @@ public class DbHelper {
         }
     }
 
+    public static class AppendTransactionInvalidException extends AppendTransactionException {
+        AppendTransactionInvalidException(String s) {
+            super(s);
+        }
+    }
+
     public static class AppendTransactionNotFoundException extends AppendTransactionException {
         AppendTransactionNotFoundException(String s) {
             super(s);
@@ -406,19 +429,18 @@ public class DbHelper {
 
     public void appendTransaction(int transactionId, String token, TransactionRequestHandler.TransactionPutAction action, int bookId) throws AppendTransactionException {
         try {
-            XAResource res = this.xaConnection.getXAResource();
-            res.start(getXid(token, transactionId), XAResource.TMRESUME);
-            PreparedStatement stmt = this.xaConnection.getConnection().prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
+            Connection conn = this.txConnectionMap.get(new ConnectionKey(transactionId, token));
+            if(conn == null) {
+                System.out.println("conn not found");
+                throw new AppendTransactionNotFoundException("Transaction not found");
+            }
+            PreparedStatement stmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
             stmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             stmt.setInt(2, bookId);
             stmt.setBoolean(3, action == TransactionRequestHandler.TransactionPutAction.RETURN);
-            boolean success = stmt.executeUpdate() > 0;
-            res.end(getXid(token, transactionId), XAResource.TMSUCCESS);
-            if(!success) {
-                throw new AppendTransactionException("Invalid actions");
+            if(stmt.executeUpdate() <= 0) {
+                throw new AppendTransactionInvalidException("Invalid actions");
             }
-        } catch (XAException e) {
-            throw new AppendTransactionNotFoundException((e.getMessage()));
         } catch (SQLException e) {
             e.printStackTrace();
             throw new AppendTransactionException(e.getMessage());
@@ -445,20 +467,17 @@ public class DbHelper {
 
     public void executeTransaction(int transactionId, String token, boolean commit) throws ExecuteTransactionException {
         try {
-            XAResource res = this.xaConnection.getXAResource();
+            Connection conn = this.txConnectionMap.get(new ConnectionKey(transactionId, token));
+            if(conn == null) {
+                throw new ExecuteTransactionNotFoundException("Transaction not found");
+            }
             if(commit) {
-                res.commit(getXid(token, transactionId), true);
+                conn.commit();
             } else {
-                res.rollback(getXid(token, transactionId));
+                conn.rollback();
             }
-        } catch (XAException e) {
-            e.printStackTrace();
-            if(e.errorCode == XAException.XAER_NOTA) {
-                // XID Not Found
-                throw new ExecuteTransactionNotFoundException(e.getMessage());
-            } else {
-                throw new ExecuteTransactionRejectedException(e.getMessage());
-            }
+            conn.close();
+            this.txConnectionMap.remove(new ConnectionKey(transactionId, token));
         } catch (SQLException e) {
             e.printStackTrace();
             throw new ExecuteTransactionException(e.getMessage());
