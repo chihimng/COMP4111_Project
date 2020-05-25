@@ -463,12 +463,6 @@ public class DbHelper {
         }
     }
 
-    public static class ExecuteTransactionRejectedException extends ExecuteTransactionException {
-        ExecuteTransactionRejectedException(String s) {
-            super(s);
-        }
-    }
-
     public void executeTransaction(int transactionId, String token, boolean commit) throws ExecuteTransactionException {
         try {
             Connection conn = this.txConnectionMap.get(new ConnectionKey(transactionId, token));
