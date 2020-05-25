@@ -59,8 +59,8 @@ public class DbHelper {
         return result;
     }
 
-    public Xid getXidByTransactionID(int transactionID) {
-        return new MysqlXid(BigInteger.valueOf(transactionID).toByteArray(), new byte[]{0x01}, 0);
+    public Xid getXid(String token, int transactionID) {
+        return new MysqlXid(token.getBytes(), BigInteger.valueOf(transactionID).toByteArray(), 0);
     }
 
     public static class SignInException extends Exception {
@@ -364,7 +364,7 @@ public class DbHelper {
         int id = 0;
         try (Connection conn = this.dataSource.getConnection();
              PreparedStatement queryStmt = conn.prepareStatement("SELECT * FROM transaction WHERE token = ? AND last_modified > CURRENT_TIMESTAMP() - 120");
-             PreparedStatement replaceStmt = conn.prepareStatement("REPLACE INTO transaction SET token = ?");
+             PreparedStatement insertStmt = conn.prepareStatement("INSERT INTO transaction SET token = ?");
              PreparedStatement getIdStmt = conn.prepareCall("SELECT LAST_INSERT_ID()")) {
             // Get XA Resource
             XAResource res = this.xaConnection.getXAResource();
@@ -374,14 +374,14 @@ public class DbHelper {
             if (rs.next()) { // id found
                 id = rs.getInt("id");
             } else {
-                replaceStmt.setString(1, token);
-                if (replaceStmt.executeUpdate() > 0) { //
+                insertStmt.setString(1, token);
+                if (insertStmt.executeUpdate() > 0) { //
                     ResultSet idRs = getIdStmt.executeQuery();
                     if (idRs.next()) {
                         id = idRs.getInt(1);
                         res.setTransactionTimeout(TRANSACTION_TIMEOUT_SECONDS);
-                        res.start(getXidByTransactionID(id), XAResource.TMNOFLAGS);
-                        res.end(getXidByTransactionID(id), XAResource.TMSUCCESS);
+                        res.start(getXid(token, id), XAResource.TMNOFLAGS);
+                        res.end(getXid(token, id), XAResource.TMSUCCESS);
                     }
                 }
             }
@@ -407,13 +407,13 @@ public class DbHelper {
     public void appendTransaction(int transactionId, String token, TransactionRequestHandler.TransactionPutAction action, int bookId) throws AppendTransactionException {
         try {
             XAResource res = this.xaConnection.getXAResource();
-            res.start(getXidByTransactionID(transactionId), XAResource.TMRESUME);
+            res.start(getXid(token, transactionId), XAResource.TMRESUME);
             PreparedStatement stmt = this.xaConnection.getConnection().prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
             stmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             stmt.setInt(2, bookId);
             stmt.setBoolean(3, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             boolean success = stmt.executeUpdate() > 0;
-            res.end(getXidByTransactionID(transactionId), XAResource.TMSUCCESS);
+            res.end(getXid(token, transactionId), XAResource.TMSUCCESS);
             if(!success) {
                 throw new AppendTransactionException("Invalid actions");
             }
@@ -447,9 +447,9 @@ public class DbHelper {
         try {
             XAResource res = this.xaConnection.getXAResource();
             if(commit) {
-                res.commit(getXidByTransactionID(transactionId), true);
+                res.commit(getXid(token, transactionId), true);
             } else {
-                res.rollback(getXidByTransactionID(transactionId));
+                res.rollback(getXid(token, transactionId));
             }
         } catch (XAException e) {
             e.printStackTrace();

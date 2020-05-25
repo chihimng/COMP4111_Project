@@ -36,7 +36,6 @@ create table transaction
 (
 	id MEDIUMINT unsigned auto_increment,
 	last_modified timestamp default CURRENT_TIMESTAMP not null,
-	statement varchar(1000) default "" not null,
 	token char(36) not null,
 	constraint transaction_pk
 		primary key (id)
