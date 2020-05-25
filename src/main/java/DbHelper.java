@@ -30,24 +30,21 @@ public class DbHelper {
         // Import MySQL Driver
         // The newInstance() call is a work around for some broken Java implementations
         Class.forName("com.mysql.jdbc.Driver").newInstance();
+        String dbUrl = "jdbc:mysql://localhost:3306/comp4111?user=comp4111&password=comp4111&useSSL=false";
 
         // Import Config
         try {
             String env = System.getenv("DB_URL");
             // Properties & Constructor
-            String dbUrl = "jdbc:mysql://localhost:3306/comp4111?user=comp4111&password=comp4111&useSSL=false";
             if (env != null) dbUrl = "jdbc:" + env;
-            this.dataSource = new MysqlXADataSource();
-            this.dataSource.setUrl(dbUrl);
-            this.xaConnection = (JDBC4MysqlXAConnection) this.dataSource.getXAConnection();
         } catch (Exception e) {
             e.printStackTrace();
             System.out.println("Failed to load db host from env, reverting to default");
         }
 
-        // Init data source
-        this.ds = new MysqlDataSource();
-        this.ds.setUrl(this.dbUrl);
+        this.dataSource = new MysqlXADataSource();
+        this.dataSource.setUrl(dbUrl);
+        this.xaConnection = (JDBC4MysqlXAConnection) this.dataSource.getXAConnection();
     }
 
     public String test() throws Exception {
@@ -415,8 +412,11 @@ public class DbHelper {
             stmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             stmt.setInt(2, bookId);
             stmt.setBoolean(3, action == TransactionRequestHandler.TransactionPutAction.RETURN);
-            stmt.executeUpdate();
+            boolean success = stmt.executeUpdate() > 0;
             res.end(getXidByTransactionID(transactionId), XAResource.TMSUCCESS);
+            if(!success) {
+                throw new AppendTransactionException("Invalid actions");
+            }
         } catch (XAException e) {
             throw new AppendTransactionNotFoundException((e.getMessage()));
         } catch (SQLException e) {

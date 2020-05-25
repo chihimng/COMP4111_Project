@@ -137,8 +137,8 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
             ObjectMapper mapper = new ObjectMapper();
             StringEntity body = new StringEntity(
-                mapper.writeValueAsString(responseBody),
-                ContentType.APPLICATION_JSON
+                    mapper.writeValueAsString(responseBody),
+                    ContentType.APPLICATION_JSON
             );
             response.setEntity(body);
         } catch (DbHelper.CreateTransactionException e) {
@@ -166,7 +166,7 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
             return;
         }
 
-        if (requestBody.operation == TransactionOperation.COMMIT) {
+        if (requestBody.operation != null) {
             try {
                 DbHelper.getInstance().executeTransaction(requestBody.transactionId, token, requestBody.operation == TransactionOperation.COMMIT);
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
