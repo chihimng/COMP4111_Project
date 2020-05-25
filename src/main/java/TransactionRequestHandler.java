@@ -137,8 +137,8 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
             ObjectMapper mapper = new ObjectMapper();
             StringEntity body = new StringEntity(
-                mapper.writeValueAsString(responseBody),
-                ContentType.APPLICATION_JSON
+                    mapper.writeValueAsString(responseBody),
+                    ContentType.APPLICATION_JSON
             );
             response.setEntity(body);
         } catch (DbHelper.CreateTransactionException e) {
@@ -166,26 +166,11 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
             return;
         }
 
-        if (requestBody.operation == TransactionOperation.COMMIT) {
+        if (requestBody.operation != null) {
             try {
-                DbHelper.getInstance().executeTransaction(requestBody.transactionId, token);
+                DbHelper.getInstance().executeTransaction(requestBody.transactionId, token, requestBody.operation == TransactionOperation.COMMIT);
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-                try {
-                    DbHelper.getInstance().deleteTransaction(requestBody.transactionId, token);
-                } catch (Exception e) {
-                    System.out.println("Transaction delete failed after successful commit");
-                }
             } catch (DbHelper.ExecuteTransactionException e) {
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
-            } catch (Exception e) {
-                e.printStackTrace();
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_INTERNAL_SERVER_ERROR);
-            }
-        } else if (requestBody.operation == TransactionOperation.CANCEL) {
-            try {
-                DbHelper.getInstance().deleteTransaction(requestBody.transactionId, token);
-                response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-            } catch (DbHelper.DeleteTransactionNotFoundException e) {
                 response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
             } catch (Exception e) {
                 e.printStackTrace();
@@ -216,7 +201,7 @@ public class TransactionRequestHandler implements HttpAsyncRequestHandler<HttpRe
         try {
             DbHelper.getInstance().appendTransaction(requestBody.transactionId, token, requestBody.action, requestBody.bookId);
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_OK);
-        } catch (DbHelper.AppendTransactionNotFoundException e) {
+        } catch (DbHelper.AppendTransactionNotFoundException | DbHelper.AppendTransactionInvalidException | DbHelper.AppendTransactionDeadlockException e) {
             response.setStatusLine(HttpVersion.HTTP_1_1, HttpStatus.SC_BAD_REQUEST);
         } catch (Exception e) {
             e.printStackTrace();
