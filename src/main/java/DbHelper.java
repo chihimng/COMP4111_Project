@@ -47,9 +47,11 @@ public class DbHelper {
     }
 
     private MysqlDataSource dataSource;
-    private ConcurrentHashMap<ConnectionKey, Connection> txConnectionMap;
+    private ConcurrentHashMap<ConnectionKey, MySQLConnection> txConnectionMap = new ConcurrentHashMap<>();
 
-    private static int TRANSACTION_TIMEOUT_SECONDS = 120;
+    private static int TRANSACTION_TIMEOUT_MILLIS = 120000;
+    private Timer timer = new Timer();
+    private ConcurrentHashMap<Integer, TimerTask> transactionTimeoutTaskMap = new ConcurrentHashMap<>();
 
     private DbHelper() throws Exception {
         // Import MySQL Driver
@@ -69,7 +71,6 @@ public class DbHelper {
 
         this.dataSource = new MysqlDataSource();
         this.dataSource.setUrl(dbUrl);
-        this.txConnectionMap = new ConcurrentHashMap<>();
     }
 
     public String test() throws Exception {
@@ -383,7 +384,7 @@ public class DbHelper {
 
     public int createTransaction(String token) throws CreateTransactionException {
         try {
-            Map.Entry<ConnectionKey, Connection> entry = this.txConnectionMap.entrySet().stream().filter(e -> e.getKey().token.equals(token)).findFirst().orElse(null);
+            Map.Entry<ConnectionKey, MySQLConnection> entry = this.txConnectionMap.entrySet().stream().filter(e -> e.getKey().token.equals(token)).findFirst().orElse(null);
             if(entry != null && !entry.getValue().isClosed()) {
                 return entry.getKey().id;
             }
@@ -391,8 +392,8 @@ public class DbHelper {
             MySQLConnection conn = ((MySQLConnection) this.dataSource.getConnection());
             this.txConnectionMap.put(new ConnectionKey((int) conn.getId(), token), conn);
             conn.setAutoCommit(false);
-            conn.setQueryTimeoutKillsConnection(true);
 
+            this.resetTransactionTimeout(conn, token);
             return (int) conn.getId();
         } catch (Exception e) {
             e.printStackTrace();
@@ -426,7 +427,7 @@ public class DbHelper {
 
     public void appendTransaction(int transactionId, String token, TransactionRequestHandler.TransactionPutAction action, int bookId) throws AppendTransactionException {
         try {
-            Connection conn = this.txConnectionMap.get(new ConnectionKey(transactionId, token));
+            MySQLConnection conn = this.txConnectionMap.get(new ConnectionKey(transactionId, token));
             if(conn == null) {
                 throw new AppendTransactionNotFoundException("Transaction not found");
             }
@@ -437,6 +438,7 @@ public class DbHelper {
             stmt.setBoolean(3, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             boolean success = stmt.executeUpdate() > 0;
             conn.prepareStatement("UNLOCK TABLES").execute();
+            resetTransactionTimeout(conn, token);
             if(!success) {
                 throw new AppendTransactionInvalidException("Invalid actions");
             }
@@ -476,9 +478,36 @@ public class DbHelper {
             }
             conn.close();
             this.txConnectionMap.remove(new ConnectionKey(transactionId, token));
+            this.cancelTransactionTimeout(transactionId);
         } catch (SQLException e) {
             e.printStackTrace();
             throw new ExecuteTransactionException(e.getMessage());
+        }
+    }
+
+    private void resetTransactionTimeout(MySQLConnection conn, String token) {
+        this.cancelTransactionTimeout((int) conn.getId());
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                try {
+                    if(!conn.isClosed()) {
+                        conn.close();
+                    }
+                    txConnectionMap.remove(new ConnectionKey((int) conn.getId(), token));
+                } catch (SQLException e) {
+                    e.printStackTrace();
+                }
+            }
+        };
+        this.transactionTimeoutTaskMap.put((int) conn.getId(), task);
+        this.timer.schedule(task, TRANSACTION_TIMEOUT_MILLIS);
+    }
+
+    private void cancelTransactionTimeout(int id) {
+        TimerTask task = this.transactionTimeoutTaskMap.get(id);
+        if(task != null) {
+            task.cancel();
         }
     }
 }
