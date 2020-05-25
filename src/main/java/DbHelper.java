@@ -1,9 +1,9 @@
 import com.mysql.jdbc.MySQLConnection;
+import com.mysql.jdbc.MysqlErrorNumbers;
 import com.mysql.jdbc.jdbc2.optional.*;
-import javax.transaction.xa.Xid;
-import java.math.BigInteger;
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 // Notice, do not import com.mysql.jdbc.*
 // or you will have problems!
@@ -47,7 +47,7 @@ public class DbHelper {
     }
 
     private MysqlDataSource dataSource;
-    private HashMap<ConnectionKey, Connection> txConnectionMap;
+    private ConcurrentHashMap<ConnectionKey, Connection> txConnectionMap;
 
     private static int TRANSACTION_TIMEOUT_SECONDS = 120;
 
@@ -69,7 +69,7 @@ public class DbHelper {
 
         this.dataSource = new MysqlDataSource();
         this.dataSource.setUrl(dbUrl);
-        this.txConnectionMap = new HashMap<>();
+        this.txConnectionMap = new ConcurrentHashMap<>();
     }
 
     public String test() throws Exception {
@@ -82,10 +82,6 @@ public class DbHelper {
         }
         conn.close();
         return result;
-    }
-
-    public Xid getXid(String token, int transactionID) {
-        return new MysqlXid(token.getBytes(), BigInteger.valueOf(transactionID).toByteArray(), 0);
     }
 
     public static class SignInException extends Exception {
@@ -387,14 +383,9 @@ public class DbHelper {
 
     public int createTransaction(String token) throws CreateTransactionException {
         try {
-            for(Map.Entry<ConnectionKey, Connection> entry : txConnectionMap.entrySet()) {
-                try {
-                    if(entry.getKey().token.equals(token) && !entry.getValue().isClosed()) {
-                        return entry.getKey().id;
-                    }
-                } catch (SQLException e) {
-                    e.printStackTrace();
-                }
+            Map.Entry<ConnectionKey, Connection> entry = this.txConnectionMap.entrySet().stream().filter(e -> e.getKey().token.equals(token)).findFirst().orElse(null);
+            if(entry != null && !entry.getValue().isClosed()) {
+                return entry.getKey().id;
             }
 
             MySQLConnection conn = ((MySQLConnection) this.dataSource.getConnection());
@@ -421,6 +412,12 @@ public class DbHelper {
         }
     }
 
+    public static class AppendTransactionDeadlockException extends AppendTransactionException {
+        AppendTransactionDeadlockException(String s) {
+            super(s);
+        }
+    }
+
     public static class AppendTransactionNotFoundException extends AppendTransactionException {
         AppendTransactionNotFoundException(String s) {
             super(s);
@@ -431,19 +428,26 @@ public class DbHelper {
         try {
             Connection conn = this.txConnectionMap.get(new ConnectionKey(transactionId, token));
             if(conn == null) {
-                System.out.println("conn not found");
                 throw new AppendTransactionNotFoundException("Transaction not found");
             }
+            conn.prepareStatement("LOCK TABLES book WRITE").execute();
             PreparedStatement stmt = conn.prepareStatement("UPDATE book SET isAvailable = ? WHERE id = ? AND isAvailable != ?");
             stmt.setBoolean(1, action == TransactionRequestHandler.TransactionPutAction.RETURN);
             stmt.setInt(2, bookId);
             stmt.setBoolean(3, action == TransactionRequestHandler.TransactionPutAction.RETURN);
-            if(stmt.executeUpdate() <= 0) {
+            boolean success = stmt.executeUpdate() > 0;
+            conn.prepareStatement("UNLOCK TABLES").execute();
+            if(!success) {
                 throw new AppendTransactionInvalidException("Invalid actions");
             }
         } catch (SQLException e) {
-            e.printStackTrace();
-            throw new AppendTransactionException(e.getMessage());
+            if(e.getErrorCode() == MysqlErrorNumbers.ER_LOCK_DEADLOCK) {
+                System.out.println("DEADLOCK");
+                throw new AppendTransactionDeadlockException(e.getMessage());
+            } else {
+                e.printStackTrace();
+                throw new AppendTransactionException(e.getMessage());
+            }
         }
     }
 
